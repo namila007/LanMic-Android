@@ -1,0 +1,21 @@
+# OS / editor
+.DS_Store
+.idea/
+*.iml
+*.swp
+
+# Flutter / Dart (also covered per package)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Local tooling
+.claude/
+.remember/
+*.textClipping
+.tokensave/
+plan/
