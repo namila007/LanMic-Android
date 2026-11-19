@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'receiver_screen.dart';
 
 void main() => runApp(const TvApp());
 
@@ -7,8 +10,13 @@ class TvApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Karaoke TV',
-        theme: ThemeData.dark(useMaterial3: true),
-        home: const Scaffold(body: Center(child: Text('Karaoke TV', style: TextStyle(fontSize: 48)))),
-      );
+    title: 'LAN Mic Receiver',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      brightness: Brightness.dark,
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme)
+          .apply(bodyColor: Colors.white, displayColor: Colors.white),
+    ),
+    home: const ReceiverScreen(),
+  );
 }
