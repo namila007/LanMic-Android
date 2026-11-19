@@ -1,4 +1,4 @@
-# karaoke_tv
+# LAN Mic Receiver (TV)
 
 A new Flutter project.
 

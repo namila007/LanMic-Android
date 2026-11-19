@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:karaoke_protocol/karaoke_protocol.dart';
+import 'package:lanmic_protocol/lanmic_protocol.dart';
 
 void main() {
   test('adds one to input values', () {

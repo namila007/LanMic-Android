@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:karaoke_tv/receiver_screen.dart';
+import 'package:lanmic_tv/receiver_screen.dart';
 
 void main() {
   for (final s in TvState.values) {

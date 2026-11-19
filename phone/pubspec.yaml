@@ -1,5 +1,5 @@
-name: karaokeapp
-description: "Karaoke Apps"
+name: lanmic
+description: "LAN Mic: use your phone as the TV microphone."
 publish_to: 'none'
 version: 0.1.0+1
 

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "me.namila.app.karaoke.karaokeapp"
+    namespace = "me.namila.app.lanmic"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "me.namila.app.karaoke.karaokeapp"
+        applicationId = "me.namila.app.lanmic"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

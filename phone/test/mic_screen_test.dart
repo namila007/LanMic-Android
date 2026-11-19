@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:karaokeapp/mic_screen.dart';
+import 'package:lanmic/mic_screen.dart';
 
 void main() {
   for (final s in PhoneState.values) {

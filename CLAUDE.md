@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Layout (two separate Flutter apps, no shared workspace)
 
-- `phone/` : phone app (`karaokeapp`, `lib/main.dart` is still the Hello World stub).
-- `tv/` : Android TV app (`karaoke_tv`, Android only, stub UI). Manifest declares leanback and `LEANBACK_LAUNCHER`.
-- `protocol/` : shared Dart package (`karaoke_protocol`) for the UDP packet format; still the generated stub, not yet a dependency of either app.
+- `phone/` : phone app (`lanmic`, `lib/main.dart` is still the Hello World stub).
+- `tv/` : Android TV app (`lanmic_tv`, Android only, stub UI). Manifest declares leanback and `LEANBACK_LAUNCHER`.
+- `protocol/` : shared Dart package (`lanmic_protocol`) for the UDP packet format; still the generated stub, not yet a dependency of either app.
 - `plan/` holds the design docs; the root has a catch-all `.gitignore` and each package has its own.
 
 Each package has its own `pubspec.yaml`, so run Flutter commands from inside `phone/`, `tv/` or `protocol/`.

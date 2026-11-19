@@ -1,3 +1,3 @@
-# karaokeapp
+# LAN Mic
 
-Karaoke Apps
+Use your phone as a live microphone for your TV over the local network.

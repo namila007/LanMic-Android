@@ -1,4 +1,4 @@
-package com.karaoke.karaoke_tv
+package me.namila.app.lanmic.tv
 
 import io.flutter.embedding.android.FlutterActivity
 
