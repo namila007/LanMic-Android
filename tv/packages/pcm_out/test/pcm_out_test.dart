@@ -52,4 +52,24 @@ void main() {
     expect(calls.last.method, 'stop');
     expect(() => o.write(Uint8List(960)), throwsStateError);
   });
+
+  test('stats parses latency and dropped count', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('pcm_out'), (c) async {
+          return {'latencyMs': 42, 'dropped': 3};
+        });
+    final s = await PcmOut().stats();
+    expect(s.latencyMs, 42);
+    expect(s.dropped, 3);
+  });
+
+  test('stats keeps a null latency', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('pcm_out'), (c) async {
+          return {'latencyMs': null, 'dropped': 0};
+        });
+    final s = await PcmOut().stats();
+    expect(s.latencyMs, isNull);
+    expect(s.dropped, 0);
+  });
 }

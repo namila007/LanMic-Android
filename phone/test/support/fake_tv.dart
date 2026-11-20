@@ -22,6 +22,12 @@ class FakeTv {
   final String name;
   bool answer;
   final received = <Packet>[];
+  InternetAddress? _lastFrom;
+  int? _lastPort;
+
+  /// Sends STATS to whoever sent the last HELLO.
+  void sendStats(StatsReport r, {int? pin}) =>
+      sendTo(Packet.stats(0, pin ?? this.pin, r), _lastFrom!, _lastPort!);
 
   int get port => _socket.port;
 
@@ -32,9 +38,13 @@ class FakeTv {
     final p = decodePacket(d.data);
     if (p == null) return;
     received.add(p);
+    if (p.type == PacketType.hello) {
+      _lastFrom = d.address;
+      _lastPort = d.port;
+    }
     if (p.type != PacketType.hello || !answer) return;
     sendTo(
-      p.pin == pin ? Packet.ack(0, p.pin, name) : Packet.reject(0, p.pin),
+      p.pin == pin ? Packet.ack(p.seq, p.pin, name) : Packet.reject(0, p.pin),
       d.address,
       d.port,
     );

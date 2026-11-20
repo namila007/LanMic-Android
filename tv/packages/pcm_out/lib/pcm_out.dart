@@ -26,6 +26,12 @@ class PcmOut {
     return _channel.invokeMethod<void>('write', frame);
   }
 
+  /// Output latency (queue + AudioTrack) and cumulative drop-oldest count.
+  Future<({int? latencyMs, int dropped})> stats() async {
+    final m = await _channel.invokeMapMethod<String, Object?>('stats');
+    return (latencyMs: m?['latencyMs'] as int?, dropped: (m?['dropped'] as int?) ?? 0);
+  }
+
   Future<void> stop() async {
     _started = false;
     await _channel.invokeMethod<void>('stop');

@@ -1,3 +1,5 @@
+import 'package:lanmic_protocol/lanmic_protocol.dart';
+
 enum TvState {
   listening('Listening'),
   connected('Phone connected'),
@@ -13,16 +15,28 @@ class ReceiverStatus {
     this.framesRx = 0,
     this.framesDropped = 0,
     this.underruns = 0,
+    this.rttMs,
+    this.delayMs,
+    this.tvDelayMs,
+    this.lostPermille,
+    this.band = WifiBand.unknown,
   });
 
   final TvState state;
   final int framesRx, framesDropped, underruns;
+  final int? rttMs, delayMs, tvDelayMs, lostPermille;
+  final WifiBand band;
 
-  Map<String, Object> toMap() => {
+  Map<String, Object?> toMap() => {
     'state': state.name,
     'framesRx': framesRx,
     'framesDropped': framesDropped,
     'underruns': underruns,
+    'rttMs': rttMs,
+    'delayMs': delayMs,
+    'tvDelayMs': tvDelayMs,
+    'lostPermille': lostPermille,
+    'band': band.index,
   };
 
   factory ReceiverStatus.fromMap(Map<Object?, Object?> m) => ReceiverStatus(
@@ -30,6 +44,14 @@ class ReceiverStatus {
     framesRx: m['framesRx'] as int? ?? 0,
     framesDropped: m['framesDropped'] as int? ?? 0,
     underruns: m['underruns'] as int? ?? 0,
+    rttMs: m['rttMs'] as int?,
+    delayMs: m['delayMs'] as int?,
+    tvDelayMs: m['tvDelayMs'] as int?,
+    lostPermille: m['lostPermille'] as int?,
+    band: switch (m['band']) {
+      final int i when i >= 0 && i < WifiBand.values.length => WifiBand.values[i],
+      _ => WifiBand.unknown,
+    },
   );
 
   @override
@@ -38,10 +60,25 @@ class ReceiverStatus {
       other.state == state &&
       other.framesRx == framesRx &&
       other.framesDropped == framesDropped &&
-      other.underruns == underruns;
+      other.underruns == underruns &&
+      other.rttMs == rttMs &&
+      other.delayMs == delayMs &&
+      other.tvDelayMs == tvDelayMs &&
+      other.lostPermille == lostPermille &&
+      other.band == band;
 
   @override
-  int get hashCode => Object.hash(state, framesRx, framesDropped, underruns);
+  int get hashCode => Object.hash(
+    state,
+    framesRx,
+    framesDropped,
+    underruns,
+    rttMs,
+    delayMs,
+    tvDelayMs,
+    lostPermille,
+    band,
+  );
 
   @override
   String toString() =>

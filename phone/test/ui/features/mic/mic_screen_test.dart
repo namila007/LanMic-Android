@@ -22,6 +22,10 @@ void main() {
     TalkMode mode = TalkMode.hold,
     bool notifications = true,
   }) async {
+    // Tall like a phone, so the stats card plus the talk button fit without scrolling.
+    t.view.physicalSize = const Size(2400, 3000);
+    t.view.devicePixelRatio = 3;
+    addTearDown(t.view.reset);
     SharedPreferences.setMockInitialValues({'mode': mode.name});
     final log = <String>[];
     session = FakeSession(log);

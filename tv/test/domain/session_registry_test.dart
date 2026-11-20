@@ -25,6 +25,13 @@ void main() {
     expect(r.activePhone, a);
   });
 
+  test('phoneInfo comes from the last valid HELLO; old phone gives null', () {
+    r.onPacket(Packet.hello(1, pin, (rttMs: 9, delayMs: 140)), a);
+    expect(r.phoneInfo, (rttMs: 9, delayMs: 140));
+    r.onPacket(Packet.hello(2, pin), a);
+    expect(r.phoneInfo, isNull);
+  });
+
   test('wrong-PIN HELLO -> REJECT, rate limited to 1/s per source', () {
     expect(r.onPacket(Packet.hello(1, 1), a).reply!.type, PacketType.reject);
     expect(r.activePhone, isNull);

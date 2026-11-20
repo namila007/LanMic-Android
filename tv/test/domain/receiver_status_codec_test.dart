@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lanmic_protocol/lanmic_protocol.dart';
 import 'package:lanmic_tv/domain/receiver_status.dart';
 
 void main() {
@@ -11,5 +12,18 @@ void main() {
 
   test('unknown state falls back to listening', () {
     expect(ReceiverStatus.fromMap({'state': 'bogus'}).state, TvState.listening);
+  });
+
+  test('map round-trips the stats fields', () {
+    const st = ReceiverStatus(
+      TvState.receiving,
+      rttMs: 9,
+      delayMs: 140,
+      tvDelayMs: 90,
+      lostPermille: 3,
+      band: WifiBand.ghz5,
+    );
+    expect(ReceiverStatus.fromMap(st.toMap()), st);
+    expect(ReceiverStatus.fromMap({'state': 'receiving'}).band, WifiBand.unknown);
   });
 }

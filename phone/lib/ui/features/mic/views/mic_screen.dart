@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:lanmic/data/services/permission_service.dart';
 import 'package:lanmic/domain/phone_state.dart';
 import 'package:lanmic/ui/features/mic/view_models/mic_view_model.dart';
+import 'package:lanmic/ui/features/mic/views/stats_card.dart';
 
 const _live = Color(0xFFD92D20);
 const _ring = Color(0xFFFF453A);
@@ -220,10 +221,23 @@ class _MicScreenState extends State<MicScreen>
                           if (!_connected) ...[
                             const SizedBox(height: 20),
                             _card(t),
+                          ] else if (_vm.link case final link?) ...[
+                            const SizedBox(height: 20),
+                            StatsCard(
+                              link: link,
+                              phoneBand: _vm.phoneBand,
+                              detailsOpen: _vm.detailsOpen,
+                              lost: _s == PhoneState.lost,
+                              onToggle: _vm.toggleDetails,
+                              fg: t.fg,
+                              muted: t.muted,
+                              card: t.card,
+                              accent: t.accent,
+                            ),
                           ],
                           const SizedBox(height: 20),
                           _segments(t),
-                          const Spacer(),
+                          const SizedBox(height: 24),
                           Center(child: _talk(t)),
                           const SizedBox(height: 12),
                           _level(t),

@@ -10,8 +10,10 @@ import 'package:lanmic/data/services/permission_service.dart';
 import 'package:lanmic/data/services/prefs_store.dart';
 import 'package:lanmic/data/services/session_service.dart';
 import 'package:lanmic/domain/input_validation.dart';
+import 'package:lanmic/domain/link_stats.dart';
 import 'package:lanmic/domain/phone_state.dart';
 import 'package:lanmic/domain/talk_gate.dart';
+import 'package:lanmic_protocol/lanmic_protocol.dart';
 
 // RMS of an all-zero chunk is 0; one LSB of noise is already ~3e-5.
 const _silentLevel = 1e-5;
@@ -26,13 +28,15 @@ class MicViewModel extends ChangeNotifier {
     required this.focus,
     required this.keepAwake,
     required this.now,
-  }) {
+    Future<WifiBand> Function()? readBand,
+  }) : _readBand = readBand ?? (() async => WifiBand.unknown) {
     _gate = TalkGate(
       onOpen: _onOpen,
       onClose: _onClose,
       sendEnd: session.sendEnd,
     );
     _sub = session.states.listen(_onSession);
+    _linkSub = session.linkUpdates.listen((_) => notifyListeners());
     _focusSub = focus.interruptions.listen((_) => onInterruption(true));
     _stopSub = fgs.stopPressed.listen((_) {
       _gate.stop();
@@ -48,14 +52,20 @@ class MicViewModel extends ChangeNotifier {
   final AudioFocus focus;
   final void Function(bool) keepAwake;
   final DateTime Function() now;
+  final Future<WifiBand> Function() _readBand;
   late final TalkGate _gate;
   late final StreamSubscription<PhoneState> _sub;
+  late final StreamSubscription<LinkSnapshot> _linkSub;
   late final StreamSubscription<void> _stopSub;
   late final StreamSubscription<void> _focusSub;
   StreamSubscription<double>? _levelSub;
   Timer? _stall;
   bool _serviceUp = false;
   bool notificationsOff = false;
+  WifiBand phoneBand = WifiBand.unknown;
+  bool detailsOpen = true; // in memory only
+  bool _wasConnected = false;
+  bool _disposed = false;
 
   String? savedIp;
   String? ipError;
@@ -77,6 +87,17 @@ class MicViewModel extends ChangeNotifier {
   PermStatus get micPerm => _micPerm;
   bool get pausedByCall => _pausedByCall;
   Stream<double> get level => mic.level;
+
+  /// Null unless connected, live or lost.
+  LinkSnapshot? get link =>
+      session.state == PhoneState.connected || session.state == PhoneState.lost
+      ? session.link
+      : null;
+
+  void toggleDetails() {
+    detailsOpen = !detailsOpen;
+    notifyListeners();
+  }
 
   Future<void> init() async {
     final p = await prefs.load();
@@ -249,7 +270,20 @@ class MicViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Read once per arrival at connected: the phone's Wi-Fi rarely changes mid-session.
+  Future<void> _readPhoneBand() async {
+    try {
+      phoneBand = await _readBand();
+    } on Object {
+      phoneBand = WifiBand.unknown;
+    }
+    if (!_disposed) notifyListeners();
+  }
+
   void _onSession(PhoneState s) {
+    final connected = s == PhoneState.connected;
+    if (connected && !_wasConnected) unawaited(_readPhoneBand());
+    _wasConnected = connected;
     _gate.enabled = s == PhoneState.connected;
     final awake = s == PhoneState.connected || s == PhoneState.lost;
     if (awake != _awake) {
@@ -261,7 +295,9 @@ class MicViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_sub.cancel());
+    unawaited(_linkSub.cancel());
     unawaited(_stopSub.cancel());
     unawaited(_focusSub.cancel());
     _stopWatch();

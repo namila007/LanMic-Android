@@ -2,12 +2,15 @@ package me.namila.app.lanmic.pcm_out
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioTimestamp
 import android.media.AudioTrack
 import android.os.Process
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 private const val FRAME_BYTES = 960
 private const val QUEUE_FRAMES = 8
@@ -18,6 +21,10 @@ class PcmOutPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var track: AudioTrack? = null
     private var queue = ArrayBlockingQueue<ByteArray>(QUEUE_FRAMES)
     private var thread: Thread? = null
+    private val dropped = AtomicInteger()
+    // One counter per start(): a late write from an old thread must not touch the new session's count.
+    private var framesWritten = AtomicLong()
+    private var sampleRate = 48000
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, "pcm_out")
@@ -36,16 +43,37 @@ class PcmOutPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val frame = call.arguments as? ByteArray
                 if (frame == null || frame.size != FRAME_BYTES) return result.error("bad_frame", "need $FRAME_BYTES bytes", null)
                 // Drop the oldest frame when the writer thread falls behind, so latency cannot grow.
-                while (!queue.offer(frame)) queue.poll()
+                while (!queue.offer(frame)) if (queue.poll() != null) dropped.incrementAndGet()
                 result.success(null)
             }
+            "stats" -> result.success(mapOf("latencyMs" to latencyMs(), "dropped" to dropped.get()))
             "stop" -> { stop(); result.success(null) }
             else -> result.notImplemented()
         }
     }
 
+    /** Queued frames plus what the AudioTrack still has to play; null without a track. */
+    private fun latencyMs(): Int? {
+        val t = track ?: return null
+        return try {
+            val ts = AudioTimestamp()
+            val outFrames = if (t.getTimestamp(ts)) {
+                maxOf(0L, framesWritten.get() - ts.framePosition)
+            } else {
+                minOf(framesWritten.get(), t.bufferSizeInFrames.toLong())
+            }
+            (queue.size * 10 + outFrames * 1000 / sampleRate).toInt()
+        } catch (_: IllegalStateException) { // track released concurrently
+            null
+        }
+    }
+
     private fun start(sampleRate: Int) {
         stop()
+        this.sampleRate = sampleRate
+        dropped.set(0)
+        val written = AtomicLong()
+        framesWritten = written
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
             .setSampleRate(sampleRate)
@@ -73,7 +101,9 @@ class PcmOutPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             try {
                 while (!Thread.currentThread().isInterrupted) {
                     val f = q.take()
-                    t.write(f, 0, f.size, AudioTrack.WRITE_BLOCKING)
+                    val n = t.write(f, 0, f.size, AudioTrack.WRITE_BLOCKING)
+                    if (n < 0) break // track error or released
+                    if (n > 0) written.addAndGet((n / 2).toLong())
                 }
             } catch (_: Exception) { // interrupted by stop(), or the track was released mid-write
             }

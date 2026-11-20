@@ -50,6 +50,27 @@ void main() {
     });
   }
 
+  testWidgets('stats line shows only when receiving or connected with a rtt', (
+    t,
+  ) async {
+    await pumpScreen(t);
+    expect(find.text('Lost audio'), findsNothing);
+    src.ctl.add(const ReceiverStatus(TvState.connected));
+    await t.pump();
+    expect(find.text('Network'), findsNothing);
+    src.ctl.add(const ReceiverStatus(TvState.connected, rttMs: 9));
+    await t.pump();
+    expect(find.text('Network'), findsOneWidget);
+    expect(find.text('9 ms'), findsOneWidget);
+    src.ctl.add(
+      const ReceiverStatus(TvState.receiving, delayMs: 140, lostPermille: 3),
+    );
+    await t.pump();
+    expect(find.text('about 140 ms'), findsOneWidget);
+    expect(find.text('Lost audio'), findsOneWidget);
+    expect(find.text('Network'), findsNothing);
+  });
+
   testWidgets('shows the real address and PIN', (t) async {
     await pumpScreen(t);
     expect(find.text('192.168.1.42'), findsOneWidget);

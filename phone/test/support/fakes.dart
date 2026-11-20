@@ -6,6 +6,7 @@ import 'package:lanmic/data/services/audio_focus.dart';
 import 'package:lanmic/data/services/foreground_service.dart';
 import 'package:lanmic/data/services/permission_service.dart';
 import 'package:lanmic/data/services/session_service.dart';
+import 'package:lanmic/domain/link_stats.dart';
 import 'package:lanmic/domain/phone_state.dart';
 
 import 'package:lanmic/data/services/mic_service.dart';
@@ -55,6 +56,17 @@ class FakeSession implements SessionService {
   Future<void> disconnect() async {
     log.add('disconnect');
     emit(PhoneState.disconnected);
+  }
+
+  final _link = StreamController<LinkSnapshot>.broadcast(sync: true);
+  LinkSnapshot linkValue = const LinkSnapshot(phoneMs: kPhoneDelayEstimateMs);
+  @override
+  LinkSnapshot get link => linkValue;
+  @override
+  Stream<LinkSnapshot> get linkUpdates => _link.stream;
+  void emitLink(LinkSnapshot v) {
+    linkValue = v;
+    _link.add(v);
   }
 
   @override

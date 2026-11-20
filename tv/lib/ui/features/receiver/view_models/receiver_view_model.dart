@@ -25,20 +25,30 @@ class ReceiverViewModel extends ChangeNotifier {
 
   Future<void> exit() async => stopService?.call();
 
-  TvState _state = TvState.listening;
+  ReceiverStatus _status = const ReceiverStatus(TvState.listening);
   String _address = _noNetwork;
   String _pin = '';
   StreamSubscription<ReceiverStatus>? _sub;
   Timer? _timer;
 
-  TvState get state => _state;
+  ReceiverStatus get status => _status;
+  TvState get state => _status.state;
   String get address => _address;
   String get pin => _pin;
 
   Future<void> init() async {
     _sub = source.status.listen((s) {
-      if (s.state == _state) return;
-      _state = s.state;
+      final old = _status;
+      _status = s;
+      // Counters (rx, dropped, underruns) are not shown: skip the rebuild for them.
+      if (s.state == old.state &&
+          s.rttMs == old.rttMs &&
+          s.delayMs == old.delayMs &&
+          s.tvDelayMs == old.tvDelayMs &&
+          s.lostPermille == old.lostPermille &&
+          s.band == old.band) {
+        return;
+      }
       notifyListeners();
     });
     _pin = (await pins.load()).toString();

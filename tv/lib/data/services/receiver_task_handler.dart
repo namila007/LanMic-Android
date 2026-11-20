@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:lanmic_protocol/lanmic_protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wifi_band/wifi_band.dart';
 
 import '../../domain/receiver_engine.dart';
 import '../../domain/receiver_status.dart';
@@ -42,7 +44,19 @@ class ReceiverTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload(); // the UI isolate may have just created the PIN
-    final engine = _engine = await buildReceiverEngine(prefs);
+    const reader = WifiBandReader();
+    var band = await reader.read(); // not polled: the TV's Wi-Fi rarely changes
+    var retried = band != WifiBand.unknown;
+    final engine = _engine = await buildReceiverEngine(
+      prefs,
+      wifiBand: () => band,
+      // Booted before Wi-Fi was up: one more read when the first phone shows up.
+      onPhoneActive: () {
+        if (retried) return;
+        retried = true;
+        unawaited(reader.read().then((b) => band = b));
+      },
+    );
     await engine.start();
     ReceiverStatus? sent;
     var ticks = 0, lastRx = 0;
@@ -53,7 +67,9 @@ class ReceiverTaskHandler extends TaskHandler {
         // 1 line/s: the TV-2 rx check, and (every 10th line) the TV-5 soak counters. Read with `adb logcat -s flutter`.
         debugPrint(
           '[lanmic] ${s.state.name} rx=${s.framesRx} (+${s.framesRx - lastRx}/s) '
-          'dropped=${s.framesDropped} underruns=${s.underruns}',
+          'dropped=${s.framesDropped} underruns=${s.underruns} '
+          'delay=${s.delayMs} tv=${s.tvDelayMs} lost=${s.lostPermille}‰ '
+          'jitter=${engine.jitter.jitterMs} band=${s.band.name}',
         );
         lastRx = s.framesRx;
       }

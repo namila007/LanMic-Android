@@ -37,6 +37,8 @@ dependencies:
   google_fonts: ^6.2.1
   lanmic_protocol:
     path: ../protocol
+  wifi_band:
+    path: ../wifi_band
   shared_preferences: ^2.5.6
   device_info_plus: ^13.3.0
   pcm_out:

@@ -78,4 +78,40 @@ void main() {
     expect(vm.state, TvState.receiving);
     vm.dispose();
   });
+
+  test('notifies on a stats-only change, not on an identical status', () async {
+    final src = FakeSource();
+    final vm = ReceiverViewModel(source: src, net: FakeNet(), pins: FakePins());
+    await vm.init();
+    var n = 0;
+    vm.addListener(() => n++);
+    src.ctl.add(const ReceiverStatus(TvState.receiving));
+    src.ctl.add(const ReceiverStatus(TvState.receiving, lostPermille: 3));
+    src.ctl.add(const ReceiverStatus(TvState.receiving, lostPermille: 3));
+    expect(n, 2);
+    expect(vm.status.lostPermille, 3);
+    vm.dispose();
+  });
+
+  test('no notify when only counters change', () async {
+    final src = FakeSource();
+    final vm = ReceiverViewModel(source: src, net: FakeNet(), pins: FakePins());
+    await vm.init();
+    src.ctl.add(const ReceiverStatus(TvState.receiving, lostPermille: 3));
+    var n = 0;
+    vm.addListener(() => n++);
+    src.ctl.add(
+      const ReceiverStatus(
+        TvState.receiving,
+        lostPermille: 3,
+        framesRx: 50,
+        framesDropped: 1,
+        underruns: 2,
+      ),
+    );
+    expect(n, 0);
+    src.ctl.add(const ReceiverStatus(TvState.receiving, lostPermille: 4));
+    expect(n, 1);
+    vm.dispose();
+  });
 }

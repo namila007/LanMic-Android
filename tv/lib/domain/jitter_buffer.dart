@@ -8,6 +8,8 @@ const _mask = 0xFFFFFFFF;
 int _cmp(int a, int b) =>
     a == b ? 0 : (((a - b) & _mask) > 0x7FFFFFFF ? -1 : 1);
 
+enum PopKind { voice, gap, underrun }
+
 class JitterBuffer {
   JitterBuffer({this.prebuffer = 3, this.maxDepth = 8});
 
@@ -18,6 +20,8 @@ class JitterBuffer {
   int? _lastPlayed;
   bool _playing = false;
   int underruns = 0;
+  int discarded = 0; // frames thrown away by overflow trims, cumulative
+  PopKind? lastPop; // null before playing and after flush
 
   bool get isPlaying => _playing;
   int get depth => _frames.length;
@@ -34,6 +38,7 @@ class JitterBuffer {
       final keys = _sorted;
       for (final k in keys.take(keys.length - prebuffer)) {
         _frames.remove(k);
+        discarded++;
       }
       _lastPlayed = (keys[keys.length - prebuffer] - 1) & _mask;
     }
@@ -49,6 +54,7 @@ class JitterBuffer {
     }
     if (_frames.isEmpty) {
       underruns++;
+      lastPop = PopKind.underrun;
       return _silence; // underrun: keep lastPlayed so late frames stay in order
     }
     var next = (_lastPlayed! + 1) & _mask;
@@ -56,12 +62,15 @@ class JitterBuffer {
     // A jump bigger than the buffer is a sender restart, not loss: resync instead of playing seconds of silence.
     if (((first - next) & _mask) > maxDepth) next = first;
     _lastPlayed = next;
-    return _frames.remove(next) ?? _silence;
+    final f = _frames.remove(next);
+    lastPop = f == null ? PopKind.gap : PopKind.voice;
+    return f ?? _silence;
   }
 
   void flush() {
     _frames.clear();
     _lastPlayed = null;
     _playing = false;
+    lastPop = null;
   }
 }

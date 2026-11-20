@@ -1,0 +1,26 @@
+name: wifi_band
+description: Reads the connected Wi-Fi band (2.4 / 5 / 6 GHz) on Android for LAN Mic.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.13.3
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  lanmic_protocol:
+    path: ../protocol
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: me.namila.app.lanmic.wifi_band
+        pluginClass: WifiBandPlugin

@@ -33,6 +33,8 @@ class SessionRegistry {
   final DateTime Function() now;
   Peer? _phone;
   DateTime? _lastHelloAt;
+  /// What the phone reported in its last valid HELLO; null for an old phone.
+  HelloInfo? phoneInfo;
   final _lastReject = <String, DateTime>{};
 
   Peer? get activePhone {
@@ -43,11 +45,12 @@ class SessionRegistry {
   /// [reply] is to be sent back to [from].
   SessionResult onPacket(Packet p, Peer from) {
     switch (p.type) {
-      case PacketType.ack || PacketType.reject:
+      case PacketType.ack || PacketType.reject || PacketType.stats:
         return SessionResult.none;
       case PacketType.hello:
         if (p.pin != pin) return _reject(p, from);
         _phone = from;
+        phoneInfo = p.helloInfo;
         _lastHelloAt = now();
         return SessionResult(reply: Packet.ack(p.seq, pin, name));
       case PacketType.audio:

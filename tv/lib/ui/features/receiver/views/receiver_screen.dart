@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:lanmic_protocol/lanmic_protocol.dart';
+
 import '../../../../domain/receiver_status.dart';
 import '../view_models/receiver_view_model.dart';
+import '../view_models/stats_line.dart';
 
 const _bg = Color(0xFF252527);
 const _muted = Color(0xFFCCCCCC);
@@ -129,7 +132,7 @@ class _Layout extends StatelessWidget {
           'LAN Mic Receiver',
           style: GoogleFonts.inter(fontSize: 56, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 28),
         Container(
           width: 880,
           padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 64),
@@ -145,14 +148,70 @@ class _Layout extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 28),
         _StatusRow(state: vm.state),
-        const SizedBox(height: 40),
+        _StatsLine(items: statsLine(vm.status)),
+        const SizedBox(height: 28),
         const Text(
           'Leave this app. It keeps running in the background.',
           style: TextStyle(fontSize: 24, color: _muted),
         ),
       ],
+    );
+  }
+}
+
+class _StatsLine extends StatelessWidget {
+  const _StatsLine({required this.items});
+
+  final List<StatItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    const base = TextStyle(fontSize: 32, height: 1.19, fontFeatures: _tabular);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Semantics(
+        label: statsSemantics(items),
+        excludeSemantics: true,
+        child: Wrap(
+          spacing: 40,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
+            for (final (label, value, q) in items)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label, style: base.copyWith(color: _muted)),
+                  const SizedBox(width: 12),
+                  Text(value, style: base.copyWith(fontWeight: FontWeight.w600)),
+                  if (q != null) ...[
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: switch (q) {
+                          Quality.good => _green,
+                          Quality.ok => const Color(0xFFFF9F0A),
+                          Quality.slow => const Color(0xFFFF453A),
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      qualityLabel(q),
+                      style: base.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

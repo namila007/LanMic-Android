@@ -13,6 +13,7 @@ import 'package:lanmic/domain/noise_gate.dart';
 import 'package:lanmic/ui/features/mic/view_models/mic_view_model.dart';
 import 'package:lanmic/ui/features/mic/views/mic_screen.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:wifi_band/wifi_band.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,7 @@ Future<void> main() async {
     keepAwake: (on) =>
         unawaited(on ? WakelockPlus.enable() : WakelockPlus.disable()),
     now: DateTime.now,
+    readBand: const WifiBandReader().read,
   );
   await vm.init();
   runApp(LanMicApp(viewModel: vm));
