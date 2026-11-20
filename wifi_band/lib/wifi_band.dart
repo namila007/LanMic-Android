@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
 
@@ -21,6 +22,17 @@ class WifiBandReader {
       return WifiBand.unknown;
     } on MissingPluginException {
       return WifiBand.unknown;
+    }
+  }
+
+  /// Holds or releases the low-latency Wi-Fi lock. Never throws.
+  Future<void> setLowLatency(bool on) async {
+    try {
+      await _channel.invokeMethod<void>('setLowLatency', on);
+    } on PlatformException catch (e) {
+      debugPrint('setLowLatency failed: ${e.code}');
+    } on MissingPluginException {
+      // no native side (tests, other platforms)
     }
   }
 }

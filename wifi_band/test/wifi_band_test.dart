@@ -32,4 +32,21 @@ void main() {
     mock(() async => throw PlatformException(code: 'x'));
     expect(await const WifiBandReader().read(), WifiBand.unknown);
   });
+
+  test('setLowLatency sends the flag', () async {
+    Object? sent;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('wifi_band'), (c) async {
+      expect(c.method, 'setLowLatency');
+      sent = c.arguments;
+      return null;
+    });
+    await const WifiBandReader().setLowLatency(true);
+    expect(sent, true);
+  });
+
+  test('setLowLatency swallows PlatformException', () async {
+    mock(() async => throw PlatformException(code: 'x'));
+    await const WifiBandReader().setLowLatency(false);
+  });
 }

@@ -39,6 +39,7 @@ void startCallback() =>
 class ReceiverTaskHandler extends TaskHandler {
   ReceiverEngine? _engine;
   Timer? _report;
+  StreamSubscription<String>? _sockLog;
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -57,6 +58,8 @@ class ReceiverTaskHandler extends TaskHandler {
         unawaited(reader.read().then((b) => band = b));
       },
     );
+    unawaited(reader.setLowLatency(true));
+    _sockLog = engine.socketEvents.listen((e) => debugPrint('[lanmic] socket $e'));
     await engine.start();
     ReceiverStatus? sent;
     var ticks = 0, lastRx = 0;
@@ -64,12 +67,14 @@ class ReceiverTaskHandler extends TaskHandler {
       final s = engine.current;
       ticks++;
       if (ticks % 4 == 0) {
+        final a = engine.stats;
         // 1 line/s: the TV-2 rx check, and (every 10th line) the TV-5 soak counters. Read with `adb logcat -s flutter`.
         debugPrint(
           '[lanmic] ${s.state.name} rx=${s.framesRx} (+${s.framesRx - lastRx}/s) '
           'dropped=${s.framesDropped} underruns=${s.underruns} '
           'delay=${s.delayMs} tv=${s.tvDelayMs} lost=${s.lostPermille}‰ '
-          'jitter=${engine.jitter.jitterMs} band=${s.band.name}',
+          'jitter=${a?.jitterMs} band=${s.band.name} target=${a?.targetMs} depth=${a?.depthMs} '
+          'out=${a?.latencyMs} mmap=${a?.mmap} burst=${a?.burst} xruns=${a?.xruns}',
         );
         lastRx = s.framesRx;
       }
@@ -86,6 +91,8 @@ class ReceiverTaskHandler extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
     _report?.cancel();
+    unawaited(_sockLog?.cancel());
+    unawaited(const WifiBandReader().setLowLatency(false));
     await _engine?.stop();
   }
 }

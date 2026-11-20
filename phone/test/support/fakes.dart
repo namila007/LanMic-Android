@@ -48,7 +48,8 @@ class FakeSession implements SessionService {
   @override
   PhoneState get state => _s;
   @override
-  String? get tvName => 'Living Room';
+  String? get tvName => name;
+  String name = 'Living Room'; // tests may shorten it: Ahem glyphs are wide
   @override
   Future<void> connect(InternetAddress tv, int pin) async =>
       log.add('connect ${tv.address} $pin');

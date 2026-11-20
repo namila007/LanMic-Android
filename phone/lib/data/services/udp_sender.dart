@@ -33,6 +33,12 @@ class UdpSender {
     try {
       final s = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       if (_closed) return s.close();
+      try {
+        // Android/Linux constants (IPPROTO_IP, IP_TOS = DSCP EF); best effort.
+        s.setRawOption(RawSocketOption.fromInt(0, 1, 0xB8));
+      } on Object {
+        // unsupported: audio still flows unmarked
+      }
       _socket = s;
       s.listen(
         (e) {

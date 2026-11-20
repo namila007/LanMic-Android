@@ -1,62 +1,36 @@
 import 'dart:async';
 import 'dart:developer' as dev;
-import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:lanmic_protocol/lanmic_protocol.dart';
 
-import 'jitter_buffer.dart';
-import 'jitter_meter.dart';
+import 'audio_engine.dart';
 import 'loss_meter.dart';
-import 'playback_pump.dart';
 import 'receiver_status.dart';
 import 'session_registry.dart';
 
-class Datagram {
-  const Datagram(this.data, this.from);
-  final Uint8List data;
-  final Peer from;
-}
+export 'audio_engine.dart' show Datagram;
 
-abstract class DatagramPort {
-  Stream<Datagram> get incoming;
-  void send(Uint8List d, Peer to);
-  Future<void> close();
-}
-
-abstract class PcmSink {
-  Future<void> start();
-  Future<void> write(Uint8List frame);
-  Future<void> stop();
-  Future<({int? latencyMs, int dropped})> stats();
-}
-
-const _audioTimeout = Duration(milliseconds: 500);
+const _audioTimeout = 500; // ms since the last accepted AUDIO before "receiving" ends
 const _housekeeping = Duration(milliseconds: 100);
-const _rebindDelay = Duration(seconds: 1);
-const _maxBindDelay = 5;
-const _underrunGrace = Duration(milliseconds: 100);
+const _statsPoll = Duration(milliseconds: 250);
 const _bandCopies = 3; // the band goes out in the first few STATS only; 3 copies survive UDP loss
 const _delaySamples = 5;
 
 WifiBand _unknownBand() => WifiBand.unknown;
 
+/// Protocol brain: registry, PIN, ACK/REJECT and STATS. Audio runs natively; this polls its numbers.
 class ReceiverEngine implements ReceiverStatusSource {
   ReceiverEngine({
-    required this._bind,
+    required this.audio,
     required this.registry,
-    required this.buffer,
-    required this.sink,
     required this.now,
     this.wifiBand = _unknownBand,
     this.onPhoneActive,
   });
 
-  final Future<DatagramPort> Function() _bind;
+  final AudioEngine audio;
   final SessionRegistry registry;
-  final JitterBuffer buffer;
-  final PcmSink sink;
   final DateTime Function() now;
   final WifiBand Function() wifiBand;
 
@@ -64,31 +38,31 @@ class ReceiverEngine implements ReceiverStatusSource {
   final void Function()? onPhoneActive;
 
   final _status = StreamController<ReceiverStatus>.broadcast();
-  DatagramPort? _port;
   StreamSubscription<Datagram>? _sub;
-  Timer? _timer, _pumpTimer, _rebindTimer;
-  bool _running = false;
-  bool _sinkReady = false, _sinkStarting = false;
-  int _epoch = 0; // bumped on every flush so a start() that finishes late knows it is stale
-  DateTime? _lastAudioAt;
-  int _framesRx = 0, _framesDropped = 0;
+  Timer? _timer, _pollTimer;
+  bool _running = false, _polling = false;
+  int _hk = 0, _statsSent = 0;
   final loss = LossMeter();
-  final jitter = JitterMeter();
   final _delays = <int>[];
-  int? _tvDelayMs, _latencyMs;
-  int _nativeDropped = 0, _hk = 0, _statsSent = 0;
-  int? _lostPermille; // refreshed once a second; keeps the loss-window loop off the datagram path
-  bool _statsInFlight = false;
-  Peer? _statsPhone;
+  int? _tvDelayMs, _jitterMs, _lostPermille;
+  AudioStats? _stats, _prev; // _prev: the counters at the last once-a-second delta
+  Peer? _accepted, _statsPhone;
+  bool _acceptOk = true; // native starts by accepting nobody; false after a failed accept so it is retried
+  DateTime? _lastStatsLog;
   ReceiverStatus _last = const ReceiverStatus(TvState.listening);
 
   @override
   Stream<ReceiverStatus> get status => _status.stream;
+
+  /// Latest native numbers (null before the first poll); for the log line.
+  AudioStats? get stats => _stats;
+  Stream<String> get socketEvents => audio.socketEvents;
+
   ReceiverStatus get current => ReceiverStatus(
     _state(),
-    framesRx: _framesRx,
-    framesDropped: _framesDropped,
-    underruns: buffer.underruns,
+    framesRx: _stats?.received ?? 0,
+    framesDropped: _stats?.late ?? 0,
+    underruns: _stats?.lost ?? 0,
     rttMs: registry.activePhone == null ? null : registry.phoneInfo?.rttMs,
     delayMs: registry.activePhone == null ? null : registry.phoneInfo?.delayMs,
     tvDelayMs: _tvDelayMs,
@@ -98,89 +72,86 @@ class ReceiverEngine implements ReceiverStatusSource {
 
   Future<void> start() async {
     _running = true;
+    _sub = audio.packets.listen(_onDatagram);
     _timer = Timer.periodic(_housekeeping, (_) {
       _refresh(force: true);
-      if (++_hk % 10 == 0) unawaited(_everySecond());
+      if (++_hk % 10 == 0) _everySecond();
     });
-    final pump = PlaybackPump(elapsed: _elapsedSince(now()), onFrame: tick);
-    _pumpTimer = Timer.periodic(
-      const Duration(milliseconds: 10),
-      (_) => pump.tick(),
-    );
-    unawaited(_connect());
+    _pollTimer = Timer.periodic(_statsPoll, (_) => unawaited(_poll()));
+    try {
+      await audio.start(); // the native side retries the bind by itself
+    } catch (e) {
+      dev.log('audio start failed: $e', name: 'lanmic');
+    }
   }
-
-  Duration Function() _elapsedSince(DateTime t0) =>
-      () => now().difference(t0);
 
   Future<void> stop() async {
     _running = false;
     _timer?.cancel();
-    _pumpTimer?.cancel();
-    _rebindTimer?.cancel();
+    _pollTimer?.cancel();
     unawaited(_sub?.cancel());
-    await _port?.close();
-    _sub = _port = null;
-    _flush();
+    _sub = null;
+    try {
+      await audio.stop();
+    } catch (e) {
+      dev.log('audio stop failed: $e', name: 'lanmic');
+    }
     _refresh(force: true);
     await _status.close();
   }
 
-  /// Pop one 10 ms frame towards the sink. Nothing is popped until the sink has
-  /// finished starting, so early frames wait in the jitter buffer instead of being lost.
-  void tick() {
-    if (!_sinkReady) {
-      _startSink();
-      return;
-    }
-    final f = buffer.pop();
-    if (f == null) return;
-    _guard('write', () => sink.write(f));
-    final t = now();
-    switch (buffer.lastPop) {
-      case PopKind.voice:
-        loss.played(t, lost: false);
-      case PopKind.gap:
-        loss.played(t, lost: true);
-      case PopKind.underrun:
-        // After the burst ends the buffer runs dry by design; only a dry buffer mid-burst is loss.
-        final at = _lastAudioAt;
-        if (at != null && t.difference(at) < _underrunGrace) {
-          loss.played(t, lost: true);
-        }
-      case null:
+  /// Every 250 ms. A slow call never overlaps the next one.
+  Future<void> _poll() async {
+    if (!_running || _polling) return;
+    _polling = true;
+    try {
+      final s = await audio.stats();
+      if (!_running) return;
+      _stats = s;
+      if (_receiving) _jitterMs = s.jitterMs;
+      _refresh();
+    } catch (e) {
+      // Frozen numbers must not keep the state at "receiving".
+      _stats = null;
+      final t = now(), last = _lastStatsLog;
+      if (last == null || t.difference(last) >= const Duration(seconds: 10)) {
+        _lastStatsLog = t;
+        dev.log('audio stats failed: $e', name: 'lanmic');
+      }
+      _refresh();
+    } finally {
+      _polling = false;
     }
   }
 
-  /// 1 s: refresh the native numbers, average the TV-side delay, send STATS to the active phone.
-  Future<void> _everySecond() async {
+  bool get _receiving {
+    final age = _stats?.lastAudioAgeMs;
+    return age != null && age < _audioTimeout;
+  }
+
+  /// 1 s: feed the loss window, average the TV-side delay, send STATS to the active phone.
+  void _everySecond() {
     if (!_running) return;
-    if (_sinkReady && !_statsInFlight) {
-      _statsInFlight = true;
-      final epoch = _epoch;
-      try {
-        final st = await sink.stats();
-        if (epoch == _epoch) {
-          // else the sink was flushed meanwhile and these numbers belong to the old session
-          _latencyMs = st.latencyMs;
-          loss.discarded(
-            now(),
-            st.dropped >= _nativeDropped ? st.dropped - _nativeDropped : st.dropped,
-          );
-          _nativeDropped = st.dropped;
+    final t = now(), s = _stats;
+    if (s != null) {
+      final p = _prev;
+      // A native restart resets the counters: rebaseline instead of going negative.
+      if (p != null && s.played >= p.played && s.lost >= p.lost && s.discarded >= p.discarded) {
+        for (var i = 0; i < s.played - p.played; i++) {
+          loss.played(t, lost: false);
         }
-      } catch (e) {
-        dev.log('sink stats failed: $e', name: 'lanmic');
-      } finally {
-        _statsInFlight = false;
+        for (var i = 0; i < s.lost - p.lost; i++) {
+          loss.played(t, lost: true);
+        }
+        loss.discarded(t, s.discarded - p.discarded);
+      }
+      _prev = s;
+      if (_receiving) {
+        _delays.add(s.depthMs + (s.latencyMs ?? 0));
+        if (_delays.length > _delaySamples) _delays.removeAt(0);
+        _tvDelayMs = (_delays.reduce((x, y) => x + y) / _delays.length).round();
       }
     }
-    if (_sinkReady && _state() == TvState.receiving) {
-      _delays.add(buffer.depth * 10 + (_latencyMs ?? 0));
-      if (_delays.length > _delaySamples) _delays.removeAt(0);
-      _tvDelayMs = (_delays.reduce((x, y) => x + y) / _delays.length).round();
-    }
-    final t = now();
     _lostPermille = loss.lostPermille(t);
     final phone = registry.activePhone;
     if (phone == null) return;
@@ -188,135 +159,59 @@ class ReceiverEngine implements ReceiverStatusSource {
     final report = StatsReport(
       tvDelayMs: _tvDelayMs,
       lostPermille: _lostPermille,
-      jitterMs: jitter.jitterMs,
+      jitterMs: _jitterMs,
       band: band,
     );
-    try {
-      _port?.send(encodePacket(Packet.stats(0, registry.pin, report)), phone);
-    } on SocketException catch (e) {
-      dev.log('stats send failed: $e', name: 'lanmic');
-    }
-  }
-
-  void _startSink() {
-    final hasAudio = buffer.isPlaying || buffer.depth >= buffer.prebuffer;
-    if (_sinkStarting || !hasAudio) return;
-    _sinkStarting = true;
-    final epoch = _epoch;
-    _guard('start', sink.start).then((ok) {
-      _sinkStarting = false;
-      if (!ok) return; // retried on the next tick
-      if (epoch == _epoch) {
-        _sinkReady = true;
-      } else {
-        _guard('stop', sink.stop); // flushed while starting
-      }
-    });
-  }
-
-  /// Runs a sink call; errors are logged, never thrown (this runs in timer callbacks).
-  Future<bool> _guard(String what, Future<void> Function() call) async {
-    try {
-      await call();
-      return true;
-    } catch (e) {
-      dev.log('sink $what failed: $e', name: 'lanmic');
-      return false;
-    }
-  }
-
-  // Bind supervisor: Wi-Fi may not be up at boot, and the socket can die later.
-  Future<void> _connect() async {
-    var delay = 1;
-    while (_running) {
-      try {
-        final port = await _bind();
-        if (!_running) return unawaited(port.close());
-        _port = port;
-        _sub = port.incoming.listen(
-          _onDatagram,
-          // dart:io reports a failed reply send here, then closes the socket (onDone rebinds).
-          onError: (Object e) => dev.log('socket error: $e', name: 'lanmic'),
-          onDone: () {
-            _port = null;
-            if (_running) _rebindTimer = Timer(_rebindDelay, _connect);
-          },
-        );
-        return;
-      } catch (e) {
-        dev.log('bind failed: $e', name: 'lanmic'); // e.g. no Wi-Fi yet at boot
-        await Future<void>.delayed(Duration(seconds: delay));
-        delay = min(delay * 2, _maxBindDelay);
-      }
-    }
+    _send(encodePacket(Packet.stats(0, registry.pin, report)), phone);
   }
 
   void _onDatagram(Datagram d) {
     final p = decodePacket(d.data);
     if (p == null) return;
-    final before = registry.activePhone;
     final res = registry.onPacket(p, d.from);
+    _syncAccept(); // before the ACK goes out: the phone sends audio only after it
     final reply = res.reply;
-    if (reply != null) {
-      try {
-        _port?.send(encodePacket(reply), d.from);
-      } on SocketException catch (e) {
-        dev.log(
-          'send failed: $e',
-          name: 'lanmic',
-        ); // e.g. ENETUNREACH: keep handling the packet
-      }
-    }
+    if (reply != null) _send(encodePacket(reply), d.from);
     final after = registry.activePhone;
     if (after != null && after != _statsPhone) {
       _statsPhone = after; // new phone: its numbers start from scratch
       onPhoneActive?.call();
       loss.clear();
       _lostPermille = null;
-      jitter.clear();
+      _jitterMs = null;
       _delays.clear();
       _tvDelayMs = null;
       _statsSent = 0;
     }
-    if (after != null && before != null && after != before) {
-      _flush(); // new phone takes over
-    }
-    if (res.end) _flush();
-    if (res.audio) {
-      final t = now();
-      jitter.onAudio(p.seq, t);
-      final discardedBefore = buffer.discarded;
-      final pushed = buffer.push(p.seq, p.payload);
-      loss.discarded(t, buffer.discarded - discardedBefore);
-      if (pushed) {
-        _framesRx++;
-        _lastAudioAt = t;
-      } else {
-        _framesDropped++;
-      }
-    }
     _refresh();
   }
 
-  void _flush() {
-    buffer.flush();
-    jitter.restart();
-    _latencyMs = null;
-    _lastAudioAt = null;
-    _epoch++;
-    if (_sinkReady) {
-      _sinkReady = false;
-      unawaited(_guard('stop', sink.stop));
+  /// A failed send (e.g. ENETUNREACH) must not escape a timer or stop the packet handling.
+  void _send(Uint8List d, Peer to) {
+    try {
+      audio.send(d, to);
+    } catch (e) {
+      dev.log('send failed: $e', name: 'lanmic');
     }
+  }
+
+  /// Tells native which phone to accept whenever the active phone changes (including to null on timeout).
+  void _syncAccept() {
+    final active = registry.activePhone;
+    if (_acceptOk && active == _accepted) return;
+    _accepted = active;
+    _acceptOk = true;
+    unawaited(
+      audio.accept(active, registry.pin).catchError((Object e) {
+        dev.log('accept failed: $e', name: 'lanmic');
+        if (_accepted == active) _acceptOk = false; // the next 100 ms refresh retries
+      }),
+    );
   }
 
   /// Evaluates the timeouts and emits when the state (or, with [force], any counter) changed.
   void _refresh({bool force = false}) {
-    final lastAudio = _lastAudioAt;
-    if (lastAudio != null && now().difference(lastAudio) >= _audioTimeout) {
-      _flush();
-    }
-    if (_state() == TvState.listening && _sinkReady) _flush();
+    _syncAccept();
     if (registry.activePhone == null) _statsPhone = null; // a same-phone reconnect starts a new session
     final next = current, state = next.state;
     if (next == _last || (!force && state == _last.state)) return;
@@ -326,7 +221,7 @@ class ReceiverEngine implements ReceiverStatusSource {
 
   TvState _state() => registry.activePhone == null
       ? TvState.listening
-      : _lastAudioAt == null
-      ? TvState.connected
-      : TvState.receiving;
+      : _receiving
+      ? TvState.receiving
+      : TvState.connected;
 }

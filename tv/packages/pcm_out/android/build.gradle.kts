@@ -29,6 +29,7 @@ android {
     namespace = "me.namila.app.lanmic.pcm_out"
 
     compileSdk = 36
+    ndkVersion = "28.2.13676358" // = flutter.ndkVersion of the app: r28+ aligns c++_shared for 16 KB pages
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -43,7 +44,25 @@ android {
 
     defaultConfig {
         minSdk = 24
+        externalNativeBuild {
+            cmake { arguments("-DANDROID_STL=c++_shared") } // Oboe's prefab needs the shared STL
+        }
     }
+
+    buildFeatures {
+        prefab = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+}
+
+dependencies {
+    implementation("com.google.oboe:oboe:1.11.0")
 }
 
 kotlin {

@@ -29,7 +29,9 @@ class MicViewModel extends ChangeNotifier {
     required this.keepAwake,
     required this.now,
     Future<WifiBand> Function()? readBand,
-  }) : _readBand = readBand ?? (() async => WifiBand.unknown) {
+    void Function(bool)? setLowLatency,
+  }) : _readBand = readBand ?? (() async => WifiBand.unknown),
+       _setLowLatency = setLowLatency ?? ((_) {}) {
     _gate = TalkGate(
       onOpen: _onOpen,
       onClose: _onClose,
@@ -53,6 +55,7 @@ class MicViewModel extends ChangeNotifier {
   final void Function(bool) keepAwake;
   final DateTime Function() now;
   final Future<WifiBand> Function() _readBand;
+  final void Function(bool) _setLowLatency;
   late final TalkGate _gate;
   late final StreamSubscription<PhoneState> _sub;
   late final StreamSubscription<LinkSnapshot> _linkSub;
@@ -289,6 +292,7 @@ class MicViewModel extends ChangeNotifier {
     if (awake != _awake) {
       _awake = awake;
       keepAwake(awake);
+      _setLowLatency(awake);
     }
     notifyListeners();
   }
@@ -296,6 +300,7 @@ class MicViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    if (_awake) _setLowLatency(false);
     unawaited(_sub.cancel());
     unawaited(_linkSub.cancel());
     unawaited(_stopSub.cancel());

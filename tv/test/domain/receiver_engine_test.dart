@@ -1,222 +1,123 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
-import 'package:lanmic_tv/domain/receiver_engine.dart';
+import 'package:lanmic_tv/domain/audio_engine.dart';
 import 'package:lanmic_tv/domain/receiver_status.dart';
 
 import '../support/engine_rig.dart';
 
 void main() {
-  rig('HELLO -> ACK to sender, connected; AUDIO -> receiving', (r) {
+  rig('HELLO from a new phone: accept(peer) is called before the ACK is sent', (r) {
     r.hello();
-    final (bytes, to) = r.port.sent.single;
+    expect(r.audio.events, ['accept $a', 'send ack']);
+    final (bytes, to) = r.audio.sent.single;
     expect(to, a);
     final ack = decodePacket(bytes)!;
     expect((ack.type, ack.ackName), (PacketType.ack, 'Chromecast'));
     expect(r.state, TvState.connected);
-    r.audio(1);
-    expect(r.state, TvState.receiving);
-    expect(r.engine.current.framesRx, 1);
+    r.hello(); // same phone again: no second accept
+    expect(r.audio.accepts, [a]);
   });
 
-  rig('plays one frame per 10 ms into the sink', (r) {
+  rig('a different phone takes over: accept(b)', (r) {
     r.hello();
-    for (var i = 1; i <= 3; i++) {
-      r.audio(i);
-    }
-    r.async.elapse(const Duration(milliseconds: 40));
-    expect(r.sink.starts, 1);
-    // The first frames wait in the buffer until start() completes: none are lost or thrown.
-    expect(r.sink.writes.map((f) => f[0]), [1, 2, 3]);
+    r.hello(b);
+    expect(r.audio.accepts, [a, b]);
   });
 
-  test(
-    'a failing sink.start is retried on the next frame, frames are kept',
-    () {
-      fakeAsync((async) {
-        final r = Rig(async, sink: FakeSink(failStarts: 1));
-        r.hello();
-        for (var i = 1; i <= 3; i++) {
-          r.audio(i);
-        }
-        r.async.elapse(const Duration(milliseconds: 50));
-        expect(r.sink.starts, 2);
-        expect(r.sink.writes.map((f) => f[0]).take(3), [1, 2, 3]);
-      });
-    },
-  );
-
-  test('sink write and stop errors are contained', () {
-    fakeAsync((async) {
-      final r = Rig(async, sink: FakeSink(failWrites: true, failStop: true));
-      r.hello();
-      for (var i = 1; i <= 3; i++) {
-        r.audio(i);
-      }
-      r.async.elapse(const Duration(milliseconds: 50));
-      r.rx(Packet.end(9, pin));
-      expect(r.sink.stops, 1);
-      expect(r.state, TvState.connected);
-    });
-  });
-
-  rig('a failing send does not skip the rest of packet handling', (r) {
-    r.port.failSend = true;
+  rig('activePhone timeout calls accept(null)', (r) {
     r.hello();
-    expect(r.state, TvState.connected);
-    r.audio(1);
-    expect(r.engine.current.framesRx, 1);
+    r.async.elapse(const Duration(seconds: 6, milliseconds: 200));
+    expect(r.audio.accepts, [a, null]);
+    expect(r.state, TvState.listening);
   });
 
-  rig(
-    'stop cancels timers, closes the port, stops the sink and the status stream',
-    (r) {
-      r.hello();
-      for (var i = 1; i <= 3; i++) {
-        r.audio(i);
-      }
-      r.async.elapse(const Duration(milliseconds: 30));
-      var done = false;
-      r.engine.status.listen((_) {}, onDone: () => done = true);
-      r.engine.stop();
-      r.async.flushMicrotasks();
-      expect(r.port.closed, isTrue);
-      expect(r.sink.stops, 1);
-      expect(r.async.pendingTimers, isEmpty);
-      expect(done, isTrue);
-    },
-  );
-
-  rig('wrong-PIN HELLO -> REJECT', (r) {
+  rig('wrong PIN -> REJECT, no accept', (r) {
     r.rx(Packet.hello(1, 1));
-    expect(decodePacket(r.port.sent.single.$1)!.type, PacketType.reject);
+    expect(decodePacket(r.audio.sent.single.$1)!.type, PacketType.reject);
+    expect(r.audio.accepts, isEmpty);
     expect(r.state, TvState.listening);
   });
 
   rig('bad magic dropped', (r) {
-    r.port.ctl.add(Datagram(Uint8List.fromList([1, 2, 3]), a));
+    r.audio.ctl.add(Datagram(Uint8List.fromList([1, 2, 3]), a));
     r.async.flushMicrotasks();
-    expect(r.port.sent, isEmpty);
+    expect(r.audio.sent, isEmpty);
   });
 
-  rig('END flushes and stops the sink once', (r) {
+  rig('receiving iff lastAudioAgeMs < 500', (r) {
     r.hello();
-    for (var i = 1; i <= 3; i++) {
-      r.audio(i);
-    }
-    r.ticks(3);
-    expect(r.sink.starts, 1);
-    r.audio(4);
-    r.rx(Packet.end(5, pin));
-    expect(r.buffer.depth, 0);
-    expect(r.state, TvState.connected);
-    expect(r.sink.stops, 1);
-  });
-
-  rig('500 ms without accepted AUDIO -> connected and flushed', (r) {
-    r.hello();
-    r.audio(1);
-    r.async.elapse(const Duration(milliseconds: 499));
+    r.setStats(const AudioStats(lastAudioAgeMs: 499));
     expect(r.state, TvState.receiving);
-    r.async.elapse(const Duration(milliseconds: 1));
+    r.setStats(const AudioStats(lastAudioAgeMs: 500));
     expect(r.state, TvState.connected);
-    expect(r.buffer.depth, 0);
-  });
-
-  rig('no HELLO for 6 s -> listening', (r) {
-    r.hello();
-    r.async.elapse(const Duration(seconds: 6));
+    r.setStats(const AudioStats());
+    expect(r.state, TvState.connected);
+    r.async.elapse(const Duration(seconds: 7)); // phone gone
     expect(r.state, TvState.listening);
   });
 
-  rig('new phone flushes the buffer (review 1a)', (r) {
+  rig('stats() throwing drops to connected, not receiving', (r) {
     r.hello();
-    for (var i = 1000; i <= 1010; i++) {
-      r.audio(i);
-      r.ticks(1);
-    }
-    r.hello(b);
-    expect(r.buffer.depth, 0);
-    for (var i = 0; i < 3; i++) {
-      r.audio(i, b);
-    }
-    expect(r.buffer.pop(), isNotNull);
+    r.setStats(const AudioStats(lastAudioAgeMs: 10, received: 5));
+    expect(r.state, TvState.receiving);
+    r.audio.failStats = true;
+    r.async.elapse(const Duration(milliseconds: 300));
+    expect(r.state, TvState.connected);
+    expect(r.engine.stats, isNull);
   });
 
-  rig('same-peer restart without END recovers (review 1b)', (r) {
+  rig('accept failure is retried', (r) {
+    r.audio.failAccepts = 1;
     r.hello();
-    for (var i = 1000; i <= 1010; i++) {
-      r.audio(i);
-      r.ticks(1);
-    }
-    for (var i = 0; i < 3; i++) {
-      r.audio(i); // stale: must not refresh the 500 ms timer
-    }
-    expect(r.engine.current.framesDropped, 3);
-    r.async.elapse(const Duration(milliseconds: 500));
-    expect(r.buffer.depth, 0);
-    for (var i = 3; i < 6; i++) {
-      r.audio(i);
-    }
-    expect(r.buffer.pop(), isNotNull);
+    r.async.elapse(const Duration(milliseconds: 250));
+    expect(r.audio.accepts, [a, a]);
+    r.async.elapse(const Duration(seconds: 1));
+    expect(r.audio.accepts, [a, a]); // accepted now: no more retries
   });
 
-  test('bind supervisor backs off 1, 2, 4 s then succeeds (review 4)', () {
+  rig('send throwing synchronously does not escape the timer', (r) {
+    r.hello();
+    r.audio.throwOnSend = true;
+    r.async.elapse(const Duration(seconds: 2)); // the 1 s STATS send throws inside the periodic timer
+    r.rx(Packet.hello(1, pin)); // and so does the ACK; handling goes on
+    expect(r.state, TvState.connected);
+  });
+
+  rig('stats poll does not overlap', (r) {
+    r.audio.hold = Completer<AudioStats>();
+    r.async.elapse(const Duration(seconds: 1));
+    expect(r.audio.statsCalls, 1);
+    r.audio.hold!.complete(const AudioStats());
+    r.async.elapse(const Duration(milliseconds: 250));
+    expect(r.audio.statsCalls, 2);
+  });
+
+  rig('status counters map received/late/lost', (r) {
+    r.hello();
+    r.setStats(const AudioStats(received: 90, late: 4, lost: 7, lastAudioAgeMs: 10));
+    final s = r.engine.current;
+    expect((s.framesRx, s.framesDropped, s.underruns), (90, 4, 7));
+  });
+
+  rig('stop stops the engine, cancels timers and closes the status stream', (r) {
+    r.hello();
+    var done = false;
+    r.engine.status.listen((_) {}, onDone: () => done = true);
+    r.engine.stop();
+    r.async.flushMicrotasks();
+    expect(r.audio.stops, 1);
+    expect(r.async.pendingTimers, isEmpty);
+    expect(done, isTrue);
+  });
+
+  test('start starts the audio engine once', () {
     fakeAsync((async) {
-      final attempts = <int>[];
-      late Rig r;
-      r = Rig(
-        async,
-        bind: () async {
-          attempts.add(async.elapsed.inSeconds);
-          if (attempts.length <= 3) throw const SocketLikeException();
-          return r.port;
-        },
-      );
-      async.elapse(const Duration(seconds: 10));
-      expect(attempts, [0, 1, 3, 7]);
+      final r = Rig(async);
+      expect(r.audio.starts, 1);
     });
   });
-
-  test('bind delay caps at 5 s', () {
-    fakeAsync((async) {
-      final attempts = <int>[];
-      Rig(
-        async,
-        bind: () async {
-          attempts.add(async.elapsed.inSeconds);
-          throw const SocketLikeException();
-        },
-      );
-      async.elapse(const Duration(seconds: 20));
-      expect(attempts, [0, 1, 3, 7, 12, 17]);
-    });
-  });
-
-  test('rebinds 1 s after the socket closes', () {
-    fakeAsync((async) {
-      final ports = <FakePort>[];
-      final r = Rig(
-        async,
-        bind: () async {
-          final p = FakePort();
-          ports.add(p);
-          return p;
-        },
-      );
-      ports.first.ctl.close();
-      async.elapse(const Duration(seconds: 1));
-      expect(ports.length, 2);
-      ports.last.ctl.add(Datagram(encodePacket(Packet.hello(1, pin)), a));
-      async.flushMicrotasks();
-      expect(ports.last.sent, hasLength(1));
-      expect(r.state, TvState.connected);
-    });
-  });
-}
-
-class SocketLikeException implements Exception {
-  const SocketLikeException();
 }

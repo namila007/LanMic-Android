@@ -1,5 +1,5 @@
 name: pcm_out
-description: Low-latency PCM16 mono AudioTrack output for the LAN Mic TV app.
+description: Kotlin UDP receiver and native Oboe low-latency output for the LAN Mic TV app.
 version: 0.0.1
 publish_to: none
 

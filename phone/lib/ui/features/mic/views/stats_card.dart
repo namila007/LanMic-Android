@@ -55,17 +55,24 @@ class StatsCard extends StatelessWidget {
             Text('Delay', style: TextStyle(fontSize: 14, color: muted)),
             const SizedBox(width: 12),
             Flexible(
-              child: Text(
-                _delayText,
-                style: TextStyle(
-                  fontSize: delayKnown ? 20 : 17,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: _tabular,
-                  color: delayKnown ? fg : muted,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _delayText,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: delayKnown ? 20 : 17,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: _tabular,
+                    color: delayKnown ? fg : muted,
+                  ),
                 ),
               ),
             ),
             if (q != null) ...[
+              const SizedBox(width: 12),
               const Spacer(),
               Container(
                 width: 8,

@@ -210,7 +210,7 @@ class _MicScreenState extends State<MicScreen>
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -237,7 +237,7 @@ class _MicScreenState extends State<MicScreen>
                           ],
                           const SizedBox(height: 20),
                           _segments(t),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           Center(child: _talk(t)),
                           const SizedBox(height: 12),
                           _level(t),
@@ -468,8 +468,8 @@ class _MicScreenState extends State<MicScreen>
         ? _disabled
         : t.accent;
     return SizedBox(
-      width: 224,
-      height: 224,
+      width: 208,
+      height: 208,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -484,8 +484,8 @@ class _MicScreenState extends State<MicScreen>
                     child: Transform.scale(
                       scale: 1 + 0.22 * p,
                       child: Container(
-                        width: 200,
-                        height: 200,
+                        width: 184,
+                        height: 184,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: _ring, width: 2),
@@ -519,9 +519,9 @@ class _MicScreenState extends State<MicScreen>
               child: GestureDetector(
                 onTap: !dis && _mode == TalkMode.keep ? _vm.tapTalk : null,
                 child: Container(
-                  width: 200,
-                  height: 200,
-                  padding: const EdgeInsets.all(16),
+                  width: 184,
+                  height: 184,
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _isLive ? _live : Colors.transparent,

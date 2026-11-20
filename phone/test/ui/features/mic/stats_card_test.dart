@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lanmic/data/services/permission_service.dart';
 import 'package:lanmic/data/services/prefs_store.dart';
@@ -6,6 +9,7 @@ import 'package:lanmic/domain/link_stats.dart';
 import 'package:lanmic/domain/phone_state.dart';
 import 'package:lanmic/ui/features/mic/view_models/mic_view_model.dart';
 import 'package:lanmic/ui/features/mic/views/mic_screen.dart';
+import 'package:lanmic/ui/features/mic/views/stats_card.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,7 +27,20 @@ const _full = LinkSnapshot(
   quality: Quality.ok,
 );
 
+/// The layout tests below need real glyph widths: the default test font (Ahem) is far wider than Roboto.
+Future<void> _loadRoboto() async {
+  final root = Platform.environment['FLUTTER_ROOT'] ??
+      (throw StateError('FLUTTER_ROOT unset: run with `flutter test`'));
+  final loader = FontLoader('Roboto');
+  for (final f in ['Regular', 'Medium', 'Bold']) {
+    final bytes = File('$root/bin/cache/artifacts/material_fonts/Roboto-$f.ttf').readAsBytesSync();
+    loader.addFont(Future.value(ByteData.sublistView(bytes)));
+  }
+  await loader.load();
+}
+
 void main() {
+  setUpAll(_loadRoboto);
   late FakeSession session;
   late MicViewModel vm;
 
@@ -154,6 +171,52 @@ void main() {
     await t.pump();
     expect(vm.phoneBand, WifiBand.ghz2_4);
     expect(find.text('2.4 GHz'), findsOneWidget);
+    await done(t);
+  });
+
+  testWidgets('Delay value never wraps', (t) async {
+    await pump(
+      t,
+      link: const LinkSnapshot(
+        phoneMs: 40, rttMs: 71, wifiMs: 36, tvMs: 218, delayMs: 294,
+        quality: Quality.slow,
+      ),
+    );
+    t.view.physicalSize = const Size(412, 915);
+    t.view.devicePixelRatio = 1;
+    session.name = 'TV';
+    session.emit(PhoneState.connected);
+    await t.pump();
+    final value = find.text('about 294 ms');
+    expect(t.getSize(value).height, lessThan(30)); // one 20 pt line
+    // The FittedBox may shrink the value, but not below 80 % and never past the card's width.
+    final fitted = find.ancestor(of: value, matching: find.byType(FittedBox));
+    final scale = t.getSize(fitted).width / t.getSize(value).width;
+    expect(scale, greaterThanOrEqualTo(0.8));
+    expect(t.getRect(fitted).right, lessThanOrEqualTo(t.getRect(find.byType(StatsCard)).right));
+    await done(t);
+  });
+
+  testWidgets('Disconnect fully visible at 412x915 live with Details open', (t) async {
+    await pump(
+      t,
+      link: const LinkSnapshot(
+        phoneMs: 40, rttMs: 71, wifiMs: 36, tvMs: 218, delayMs: 294,
+        quality: Quality.slow,
+      ),
+    );
+    t.view.physicalSize = const Size(412, 915);
+    t.view.devicePixelRatio = 1;
+    session.name = 'TV';
+    session.emit(PhoneState.connected);
+    await t.runAsync(() => vm.connect('192.168.1.42', '482917'));
+    vm.pressTalk();
+    await t.pump();
+    final r = t.getRect(find.text('Disconnect'));
+    expect(vm.state, PhoneState.live);
+    expect(r.bottom, lessThanOrEqualTo(915));
+    expect(find.byType(Scrollable).evaluate().isNotEmpty, true);
+    expect(t.state<ScrollableState>(find.byType(Scrollable).first).position.maxScrollExtent, 0);
     await done(t);
   });
 }

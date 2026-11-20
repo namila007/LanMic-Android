@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
-import 'package:lanmic_tv/domain/jitter_buffer.dart';
+import 'package:lanmic_tv/domain/audio_engine.dart';
 import 'package:lanmic_tv/domain/receiver_engine.dart';
 import 'package:lanmic_tv/domain/receiver_status.dart';
 import 'package:lanmic_tv/domain/session_registry.dart';
@@ -14,79 +13,60 @@ const pin = 482917;
 const a = Peer('10.0.0.1', 4000);
 const b = Peer('10.0.0.2', 4001);
 
-class FakePort implements DatagramPort {
+/// Records accept/send in one ordered log; stats are scripted by the test.
+class FakeAudioEngine implements AudioEngine {
   final ctl = StreamController<Datagram>(sync: true);
+  final events = <String>[]; // 'accept <peer>' / 'accept null' / 'send <type>'
   final sent = <(Uint8List, Peer)>[];
-  bool closed = false, failSend = false;
+  final accepts = <Peer?>[];
+  AudioStats statsValue = const AudioStats();
+  Completer<AudioStats>? hold; // makes stats() hang until completed
+  int starts = 0, stops = 0, statsCalls = 0;
+  bool failStats = false, throwOnSend = false;
+  int failAccepts = 0; // the next N accept() calls fail
+
   @override
-  Stream<Datagram> get incoming => ctl.stream;
+  Stream<Datagram> get packets => ctl.stream;
+  @override
+  Stream<String> get socketEvents => const Stream.empty();
+  @override
+  Future<void> start() async => starts++;
+  @override
+  Future<void> stop() async => stops++;
+  @override
+  Future<void> accept(Peer? peer, int pin) async {
+    accepts.add(peer);
+    events.add('accept $peer');
+    if (failAccepts > 0) {
+      failAccepts--;
+      throw StateError('accept failed');
+    }
+  }
+
   @override
   void send(Uint8List d, Peer to) {
-    if (failSend) throw const SocketException('Network is unreachable');
+    if (throwOnSend) throw StateError('send failed');
     sent.add((d, to));
+    events.add('send ${decodePacket(d)!.type.name}');
   }
 
   @override
-  Future<void> close() async => closed = true;
-}
-
-/// Mirrors the real PcmOut: start completes asynchronously, and write throws
-/// synchronously until start has completed.
-class FakeSink implements PcmSink {
-  FakeSink({
-    this.failStarts = 0,
-    this.failWrites = false,
-    this.failStop = false,
-  });
-  final int failStarts;
-  final bool failWrites, failStop;
-  int? latencyMs;
-  int dropped = 0;
-  int starts = 0, stops = 0;
-  bool started = false;
-  final writes = <Uint8List>[];
-  @override
-  Future<void> start() async {
-    final n = ++starts;
-    await Future<void>.value();
-    if (n <= failStarts) throw StateError('start failed');
-    started = true;
-  }
-
-  @override
-  Future<void> write(Uint8List frame) {
-    if (!started) throw StateError('write before start completed');
-    if (failWrites) return Future.error(StateError('write failed'));
-    writes.add(frame);
-    return Future.value();
-  }
-
-  @override
-  Future<({int? latencyMs, int dropped})> stats() async =>
-      (latencyMs: latencyMs, dropped: dropped);
-
-  @override
-  Future<void> stop() async {
-    stops++;
-    started = false;
-    if (failStop) throw StateError('stop failed');
+  Future<AudioStats> stats() {
+    statsCalls++;
+    if (failStats) return Future.error(StateError('stats failed'));
+    return hold?.future ?? Future.value(statsValue);
   }
 }
 
 class Rig {
   Rig(
     this.async, {
-    Future<DatagramPort> Function()? bind,
-    FakeSink? sink,
     WifiBand band = WifiBand.ghz5,
     void Function()? onPhoneActive,
-  })
-    : sink = sink ?? FakeSink() {
+  }) {
     engine = ReceiverEngine(
-      bind: bind ?? () async => port,
+      audio: audio,
       registry: SessionRegistry(pin: pin, name: 'Chromecast', now: now),
-      buffer: buffer,
-      sink: this.sink,
       now: now,
       wifiBand: () => band,
       onPhoneActive: onPhoneActive,
@@ -95,27 +75,22 @@ class Rig {
     async.flushMicrotasks();
   }
   final FakeAsync async;
-  final port = FakePort();
-  final FakeSink sink;
-  final buffer = JitterBuffer();
+  final audio = FakeAudioEngine();
   late final ReceiverEngine engine;
   DateTime now() => DateTime(2026).add(async.elapsed);
 
   void rx(Packet p, [Peer from = a]) {
-    port.ctl.add(Datagram(encodePacket(p), from));
+    audio.ctl.add(Datagram(encodePacket(p), from));
     async.flushMicrotasks();
   }
 
   void hello([Peer from = a, HelloInfo? info]) =>
       rx(Packet.hello(1, pin, info), from);
-  void audio(int seq, [Peer from = a]) => rx(
-    Packet.audio(seq, pin, Uint8List(kFrameBytes)..[0] = seq & 0xFF),
-    from,
-  );
-  void ticks(int n) {
-    for (var i = 0; i < n; i++) {
-      engine.tick();
-    }
+
+  /// Native stats as if audio is arriving (age < 500 ms), then lets a poll pick them up.
+  void setStats(AudioStats s) {
+    audio.statsValue = s;
+    async.elapse(const Duration(milliseconds: 250));
   }
 
   TvState get state => engine.current.state;
@@ -123,4 +98,3 @@ class Rig {
 
 void rig(String name, void Function(Rig r) body) =>
     test(name, () => fakeAsync((async) => body(Rig(async))));
-

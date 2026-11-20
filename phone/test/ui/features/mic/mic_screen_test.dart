@@ -57,6 +57,18 @@ void main() {
     vm.dispose();
   }
 
+  testWidgets('talk button is at least 48 dp and labelled', (t) async {
+    final h = t.ensureSemantics();
+    await pump(t);
+    await toState(t, PhoneState.connected);
+    final size = t.getSize(find.byKey(const ValueKey('talk')));
+    expect(size.width, greaterThanOrEqualTo(48));
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(find.bySemanticsLabel(RegExp('Talk button, hold to talk')), findsOneWidget);
+    h.dispose();
+    await close(t);
+  });
+
   const chips = {
     PhoneState.disconnected: 'Not connected',
     PhoneState.connecting: 'Connecting…',

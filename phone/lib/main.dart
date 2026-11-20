@@ -38,6 +38,7 @@ Future<void> main() async {
         unawaited(on ? WakelockPlus.enable() : WakelockPlus.disable()),
     now: DateTime.now,
     readBand: const WifiBandReader().read,
+    setLowLatency: const WifiBandReader().setLowLatency,
   );
   await vm.init();
   runApp(LanMicApp(viewModel: vm));

@@ -22,6 +22,7 @@ void main() {
   late FakeFocus focus;
   late DateTime clock;
   late List<bool> awake;
+  late List<bool> lowLatency;
   late MicViewModel vm;
 
   setUp(() async {
@@ -34,6 +35,7 @@ void main() {
     focus = FakeFocus(log);
     clock = DateTime.utc(2026);
     awake = [];
+    lowLatency = [];
     vm = MicViewModel(
       session: session,
       mic: mic,
@@ -43,6 +45,7 @@ void main() {
       focus: focus,
       keepAwake: awake.add,
       now: () => clock,
+      setLowLatency: lowLatency.add,
     );
     await vm.init();
   });
@@ -52,6 +55,23 @@ void main() {
     session.emit(PhoneState.connected);
     log.clear();
   }
+
+  test('low-latency lock on at connected, off at disconnect', () async {
+    await connected();
+    expect(lowLatency, [true]);
+    session.emit(PhoneState.disconnected);
+    expect(lowLatency, [true, false]);
+  });
+
+  test('low-latency lock is held through lost and reconnect', () async {
+    await connected();
+    session.emit(PhoneState.lost);
+    session.emit(PhoneState.connected);
+    expect(lowLatency, [true]); // never released in between
+    session.emit(PhoneState.lost);
+    session.emit(PhoneState.disconnected);
+    expect(lowLatency, [true, false]);
+  });
 
   test('init restores ip and mode from prefs', () async {
     SharedPreferences.setMockInitialValues({'ip': '10.0.0.9', 'mode': 'keep'});
