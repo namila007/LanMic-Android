@@ -1,15 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
-enum PhoneState { connect, wrongPin, ready, liveHold, liveKeep, lost }
-
-enum TalkMode { hold, keep }
+import 'package:flutter/services.dart';
+import 'package:lanmic/data/services/permission_service.dart';
+import 'package:lanmic/domain/phone_state.dart';
+import 'package:lanmic/ui/features/mic/view_models/mic_view_model.dart';
 
 const _live = Color(0xFFD92D20);
 const _ring = Color(0xFFFF453A);
 const _blue = Color(0xFF0066CC);
 const _disabled = Color(0xFF7A7A7A);
+const _paused = Color(0xFF8A5A00);
 
 class _Tokens {
   const _Tokens(
@@ -53,90 +54,115 @@ const _light = _Tokens(
 );
 
 const _chipDots = {
-  PhoneState.connect: Color(0xFF8E8E93),
+  PhoneState.disconnected: Color(0xFF8E8E93),
+  PhoneState.connecting: Color(0xFF8E8E93),
+  PhoneState.connected: Color(0xFF30D158),
+  PhoneState.live: Color(0xFF30D158),
+  PhoneState.noResponse: Color(0xFFFF453A),
   PhoneState.wrongPin: Color(0xFFFF453A),
-  PhoneState.ready: Color(0xFF30D158),
-  PhoneState.liveHold: Color(0xFF30D158),
-  PhoneState.liveKeep: Color(0xFF30D158),
   PhoneState.lost: Color(0xFFFF9F0A),
 };
 
-String chipLabel(PhoneState s) => switch (s) {
-  PhoneState.connect => 'Not connected',
+String chipLabel(PhoneState s, String? tvName) => switch (s) {
+  PhoneState.disconnected => 'Not connected',
+  PhoneState.connecting => 'Connecting…',
+  PhoneState.noResponse => 'No response. Check IP and Wi-Fi.',
   PhoneState.wrongPin => 'Wrong PIN',
   PhoneState.lost => 'Connection lost. Retrying…',
-  _ => 'Connected · Living Room',
+  PhoneState.connected ||
+  PhoneState.live => tvName == null ? 'Connected' : 'Connected · $tvName',
 };
 
-String _talkLabel(PhoneState s) => switch (s) {
-  PhoneState.connect || PhoneState.wrongPin => 'Connect first',
-  PhoneState.ready => 'HOLD TO TALK',
-  PhoneState.liveHold => 'TALKING…',
-  PhoneState.liveKeep => 'LIVE · TAP TO STOP',
+String _talkLabel(PhoneState s, TalkMode m) => switch (s) {
+  PhoneState.disconnected ||
+  PhoneState.connecting ||
+  PhoneState.noResponse ||
+  PhoneState.wrongPin => 'Connect first',
+  PhoneState.connected => m == TalkMode.keep ? 'TAP TO TALK' : 'HOLD TO TALK',
+  PhoneState.live => m == TalkMode.keep ? 'LIVE · TAP TO STOP' : 'TALKING…',
   PhoneState.lost => 'Reconnecting…',
 };
 
 class MicScreen extends StatefulWidget {
-  const MicScreen({super.key, this.initialState = PhoneState.connect});
+  const MicScreen({super.key, required this.viewModel});
 
-  /// Test seam: start in any state.
-  final PhoneState initialState;
+  final MicViewModel viewModel;
 
   @override
   State<MicScreen> createState() => _MicScreenState();
 }
 
 class _MicScreenState extends State<MicScreen>
-    with SingleTickerProviderStateMixin {
-  late PhoneState _s = widget.initialState;
-  late TalkMode _mode = _s == PhoneState.liveKeep
-      ? TalkMode.keep
-      : TalkMode.hold;
-  late final _pin = TextEditingController(
-    text: _s == PhoneState.wrongPin ? '000000' : '',
-  );
-  final _addr = TextEditingController(text: '192.168.1.42');
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  MicViewModel get _vm => widget.viewModel;
+  late final _pin = TextEditingController();
+  late final _addr = TextEditingController(text: _vm.savedIp ?? '');
   late final _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1600),
   );
-
-  // Elapsed live time; restarts each time the mic goes live.
-  int _seconds = 0;
   Timer? _tick;
+  bool _wasLive = false;
+  TalkMode _wasMode = TalkMode.hold;
 
-  bool get _isLive => _s == PhoneState.liveHold || _s == PhoneState.liveKeep;
+  PhoneState get _s => _vm.state;
+  TalkMode get _mode => _vm.mode;
+  bool get _isLive => _s == PhoneState.live;
   bool get _connected =>
-      _s == PhoneState.ready || _isLive || _s == PhoneState.lost;
-  bool get _talkDisabled => !_connected || _s == PhoneState.lost;
+      _s == PhoneState.connected || _isLive || _s == PhoneState.lost;
+  bool get _talkDisabled =>
+      !(_s == PhoneState.connected || _isLive) ||
+      _vm.micPerm == PermStatus.permanentlyDenied;
 
   @override
   void initState() {
     super.initState();
-    if (_isLive) _startClock();
+    WidgetsBinding.instance.addObserver(this);
+    _vm.addListener(_onVm);
+    _syncLive();
   }
 
-  void _startClock() {
-    _pulse.repeat();
-    _seconds = 0;
-    _tick = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => setState(() => _seconds++),
-    );
+  // Haptics, pulse and the 1 s repaint all follow the view model's live state.
+  void _onVm() {
+    final wasLive = _wasLive;
+    final wasMode = _wasMode;
+    _syncLive();
+    if (_isLive && !wasLive) HapticFeedback.mediumImpact();
+    if (!_isLive && wasLive && wasMode == TalkMode.keep) {
+      HapticFeedback.mediumImpact();
+      HapticFeedback.mediumImpact();
+    }
   }
 
-  void _stopClock() {
-    _pulse.stop();
-    _tick?.cancel();
-    _tick = null;
+  void _syncLive() {
+    _wasMode = _mode;
+    if (_isLive && !_wasLive) {
+      _pulse.repeat();
+      _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+    if (!_isLive && _wasLive) {
+      _pulse.stop();
+      _tick?.cancel();
+      _tick = null;
+    }
+    _wasLive = _isLive;
   }
 
   String get _elapsed {
-    return '${_seconds ~/ 60}:${(_seconds % 60).toString().padLeft(2, '0')}';
+    final s = _vm.liveFor.inSeconds;
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      _vm.onLifecycle(state);
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _vm.removeListener(_onVm);
     _tick?.cancel();
     _pulse.dispose();
     _pin.dispose();
@@ -144,23 +170,13 @@ class _MicScreenState extends State<MicScreen>
     super.dispose();
   }
 
-  void _set(PhoneState s) {
-    final wasLive = _isLive;
-    setState(() => _s = s);
-    if (_isLive && !wasLive) _startClock();
-    if (!_isLive && wasLive) _stopClock();
-  }
-
-  void _connectTap() =>
-      _set(_pin.text == '000000' ? PhoneState.wrongPin : PhoneState.ready);
-
-  void _setMode(TalkMode m) {
-    _mode = m;
-    _set(_isLive ? PhoneState.ready : _s);
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _vm,
+    builder: (context, _) => _screen(context),
+  );
+
+  Widget _screen(BuildContext context) {
     final t = Theme.of(context).brightness == Brightness.dark ? _dark : _light;
     return Scaffold(
       backgroundColor: t.bg,
@@ -182,7 +198,9 @@ class _MicScreenState extends State<MicScreen>
                 ),
               ),
             ),
-            if (_s == PhoneState.liveKeep) const _Banner(),
+            if (_isLive && _mode == TalkMode.keep) const _Banner(),
+            if (_vm.pausedByCall)
+              const _Banner(text: 'Paused by a call', color: _paused),
             Expanded(
               // Fills the screen so the talk area centres and Disconnect sits
               // at the bottom, but still scrolls when the keyboard is up.
@@ -209,11 +227,30 @@ class _MicScreenState extends State<MicScreen>
                           Center(child: _talk(t)),
                           const SizedBox(height: 12),
                           _level(t),
+                          if (_vm.notificationsOff &&
+                              _isLive &&
+                              _mode == TalkMode.keep)
+                            Text(
+                              "Notifications are off. The Stop control won't show.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 14, color: t.muted),
+                            ),
+                          if (_vm.micError != null)
+                            Text(
+                              _vm.micError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 14, color: t.err),
+                            ),
+                          if (_vm.micPerm == PermStatus.permanentlyDenied)
+                            TextButton(
+                              onPressed: _vm.openSettings,
+                              child: const Text('Open settings'),
+                            ),
                           const Spacer(),
                           if (_connected)
                             Center(
                               child: OutlinedButton(
-                                onPressed: () => _set(PhoneState.connect),
+                                onPressed: _vm.disconnect,
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: t.accent,
                                   side: BorderSide(color: t.accent),
@@ -241,24 +278,20 @@ class _MicScreenState extends State<MicScreen>
     );
   }
 
-  Widget _chip(_Tokens t) => GestureDetector(
-    // Debug: long-press the chip to force the `lost` state.
-    onLongPress: () => _set(PhoneState.lost),
-    child: Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: t.chipBg,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _dot(10, _chipDots[_s]!),
-          const SizedBox(width: 8),
-          Text(chipLabel(_s), style: const TextStyle(fontSize: 14)),
-        ],
-      ),
+  Widget _chip(_Tokens t) => Container(
+    height: 36,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: t.chipBg,
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _dot(10, _chipDots[_s]!),
+        const SizedBox(width: 8),
+        Text(chipLabel(_s, _vm.tvName), style: const TextStyle(fontSize: 14)),
+      ],
     ),
   );
 
@@ -271,7 +304,15 @@ class _MicScreenState extends State<MicScreen>
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _field(t, 'TV address', _addr, 17, 0, TextInputType.number),
+        _field(
+          t,
+          'TV address',
+          _addr,
+          17,
+          0,
+          TextInputType.number,
+          hint: '192.168.1.42',
+        ),
         const SizedBox(height: 12),
         _field(
           t,
@@ -291,9 +332,20 @@ class _MicScreenState extends State<MicScreen>
             style: TextStyle(fontSize: 14, color: t.err),
           ),
         ],
+        if (_vm.ipError != null) ...[
+          const SizedBox(height: 12),
+          Text(_vm.ipError!, style: TextStyle(fontSize: 14, color: t.err)),
+        ],
+        if (_vm.micPerm == PermStatus.denied) ...[
+          const SizedBox(height: 12),
+          Text(
+            'LAN Mic needs the microphone to send your voice to the TV.',
+            style: TextStyle(fontSize: 14, color: t.muted),
+          ),
+        ],
         const SizedBox(height: 16),
         FilledButton(
-          onPressed: _connectTap,
+          onPressed: () => _vm.connect(_addr.text.trim(), _pin.text),
           style: FilledButton.styleFrom(
             backgroundColor: _blue,
             foregroundColor: Colors.white,
@@ -361,7 +413,7 @@ class _MicScreenState extends State<MicScreen>
         ])
           Expanded(
             child: GestureDetector(
-              onTap: () => _setMode(m),
+              onTap: () => _vm.setMode(m),
               child: Container(
                 height: 44,
                 alignment: Alignment.center,
@@ -441,19 +493,17 @@ class _MicScreenState extends State<MicScreen>
             // Raw pointer events for hold: a tap would cancel on finger drift.
             child: Listener(
               onPointerDown: !dis && _mode == TalkMode.hold
-                  ? (_) => _set(PhoneState.liveHold)
+                  ? (_) => _vm.pressTalk()
                   : null,
-              onPointerUp: !dis && _mode == TalkMode.hold
-                  ? (_) => _set(PhoneState.ready)
+              // Release is always wired in hold mode so a lift is never lost.
+              onPointerUp: _mode == TalkMode.hold
+                  ? (_) => _vm.releaseTalk()
                   : null,
-              onPointerCancel: !dis && _mode == TalkMode.hold
-                  ? (_) => _set(PhoneState.ready)
+              onPointerCancel: _mode == TalkMode.hold
+                  ? (_) => _vm.releaseTalk()
                   : null,
               child: GestureDetector(
-                onTap: !dis && _mode == TalkMode.keep
-                    ? () =>
-                          _set(_isLive ? PhoneState.ready : PhoneState.liveKeep)
-                    : null,
+                onTap: !dis && _mode == TalkMode.keep ? _vm.tapTalk : null,
                 child: Container(
                   width: 200,
                   height: 200,
@@ -471,7 +521,7 @@ class _MicScreenState extends State<MicScreen>
                         Icon(Icons.mic, size: 40, color: accent),
                         const SizedBox(height: 8),
                         Text(
-                          _talkLabel(_s),
+                          _talkLabel(_s, _mode),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: dis ? 17 : 21,
@@ -500,10 +550,17 @@ class _MicScreenState extends State<MicScreen>
     );
   }
 
-  Widget _level(_Tokens t) {
-    final base = _s == PhoneState.liveKeep
+  Widget _level(_Tokens t) => StreamBuilder<double>(
+    stream: _vm.level,
+    initialData: 0,
+    builder: (_, snap) => _bars(t, snap.data ?? 0),
+  );
+
+  Widget _bars(_Tokens t, double level) {
+    final base = _mode == TalkMode.keep
         ? const [14, 22, 34, 26, 38, 20, 30, 18, 12]
         : const [10, 16, 24, 34, 40, 30, 22, 16, 10];
+    final k = (level * 4).clamp(0.0, 1.0);
     return Column(
       children: [
         SizedBox(
@@ -516,7 +573,7 @@ class _MicScreenState extends State<MicScreen>
                 if (i > 0) const SizedBox(width: 5),
                 Container(
                   width: 6,
-                  height: _isLive ? base[i].toDouble() : 6,
+                  height: _isLive ? 6 + (base[i] - 6) * (0.25 + 0.75 * k) : 6,
                   decoration: BoxDecoration(
                     color: _isLive ? t.fg : t.idle,
                     borderRadius: BorderRadius.circular(3),
@@ -540,21 +597,24 @@ Widget _dot(double d, Color c) => Container(
 );
 
 class _Banner extends StatelessWidget {
-  const _Banner();
+  const _Banner({this.text = 'MIC IS LIVE', this.color = _live});
+
+  final String text;
+  final Color color;
 
   @override
   Widget build(BuildContext context) => Container(
     height: 40,
-    color: _live,
+    color: color,
     alignment: Alignment.center,
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         _dot(8, Colors.white),
         const SizedBox(width: 8),
-        const Text(
-          'MIC IS LIVE',
-          style: TextStyle(
+        Text(
+          text,
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: Colors.white,

@@ -2,14 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-enum TvState {
-  listening('Listening'),
-  connected('Phone connected'),
-  receiving('Receiving audio');
-
-  const TvState(this.label);
-  final String label;
-}
+import '../../../../domain/receiver_status.dart';
+import '../view_models/receiver_view_model.dart';
 
 const _bg = Color(0xFF252527);
 const _muted = Color(0xFFCCCCCC);
@@ -18,9 +12,9 @@ const _grey = Color(0xFF8E8E93);
 const _tabular = [FontFeature.tabularFigures()];
 
 class ReceiverScreen extends StatefulWidget {
-  const ReceiverScreen({super.key, this.initialState = TvState.listening});
+  const ReceiverScreen({super.key, required this.vm});
 
-  final TvState initialState;
+  final ReceiverViewModel vm;
 
   @override
   State<ReceiverScreen> createState() => _ReceiverScreenState();
@@ -29,7 +23,6 @@ class ReceiverScreen extends StatefulWidget {
 const _blue = Color(0xFF2997FF);
 
 class _ReceiverScreenState extends State<ReceiverScreen> {
-  late TvState _state = widget.initialState;
   final _screenFocus = FocusNode();
   final _exitFocus = FocusNode();
 
@@ -56,79 +49,62 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
     return KeyEventResult.ignored;
   }
 
-  // Fake transition so every state is reachable until networking exists.
-  void _cycle() => setState(
-    () => _state = TvState.values[(_state.index + 1) % TvState.values.length],
-  );
-
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-      },
-      child: Actions(
-        actions: {
-          ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              _cycle();
-              return null;
-            },
-          ),
-        },
-        child: Focus(
-          focusNode: _screenFocus,
-          autofocus: true,
-          onKeyEvent: _onKey,
-          child: GestureDetector(
-            onTap: _cycle,
-            child: Scaffold(
-              backgroundColor: _bg,
-              body: SizedBox.expand(
-                child: FittedBox(
-                  child: SizedBox(
-                    width: 1280,
-                    height: 720,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(child: _Layout(state: _state)),
-                        Positioned(
-                          right: 32,
-                          bottom: 32,
-                          child: OutlinedButton(
-                            focusNode: _exitFocus,
-                            onPressed: SystemNavigator.pop,
-                            style:
-                                OutlinedButton.styleFrom(
-                                  side: const BorderSide(color: _blue),
-                                  shape: const StadiumBorder(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 14,
-                                  ),
-                                  textStyle: GoogleFonts.inter(fontSize: 20),
-                                ).copyWith(
-                                  // Filled when focused so the D-pad target is obvious.
-                                  backgroundColor:
-                                      WidgetStateProperty.resolveWith(
-                                        (s) => s.contains(WidgetState.focused)
-                                            ? _blue
-                                            : null,
-                                      ),
-                                  foregroundColor:
-                                      WidgetStateProperty.resolveWith(
-                                        (s) => s.contains(WidgetState.focused)
-                                            ? Colors.white
-                                            : _blue,
-                                      ),
-                                ),
-                            child: const Text('Exit'),
-                          ),
-                        ),
-                      ],
+    return Focus(
+      focusNode: _screenFocus,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: ListenableBuilder(
+        listenable: widget.vm,
+        builder: (context, _) => Scaffold(
+          backgroundColor: _bg,
+          body: SizedBox.expand(
+            child: FittedBox(
+              child: SizedBox(
+                width: 1280,
+                height: 720,
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: _Layout(vm: widget.vm)),
+                    Positioned(
+                      right: 32,
+                      bottom: 32,
+                      child: OutlinedButton(
+                        focusNode: _exitFocus,
+                        onPressed: () async {
+                          try {
+                            await widget.vm.exit();
+                          } finally {
+                            await SystemNavigator.pop();
+                          }
+                        },
+                        style:
+                            OutlinedButton.styleFrom(
+                              side: const BorderSide(color: _blue),
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 14,
+                              ),
+                              textStyle: GoogleFonts.inter(fontSize: 20),
+                            ).copyWith(
+                              // Filled when focused so the D-pad target is obvious.
+                              backgroundColor: WidgetStateProperty.resolveWith(
+                                (s) => s.contains(WidgetState.focused)
+                                    ? _blue
+                                    : null,
+                              ),
+                              foregroundColor: WidgetStateProperty.resolveWith(
+                                (s) => s.contains(WidgetState.focused)
+                                    ? Colors.white
+                                    : _blue,
+                              ),
+                            ),
+                        child: const Text('Exit'),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -140,9 +116,9 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
 }
 
 class _Layout extends StatelessWidget {
-  const _Layout({required this.state});
+  const _Layout({required this.vm});
 
-  final TvState state;
+  final ReceiverViewModel vm;
 
   @override
   Widget build(BuildContext context) {
@@ -161,16 +137,16 @@ class _Layout extends StatelessWidget {
             color: Colors.black,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Column(
+          child: Column(
             children: [
-              _InfoRow('Phone address to use', '192.168.1.42'),
-              SizedBox(height: 24),
-              _InfoRow('PIN', '482917'),
+              _InfoRow('Phone address to use', vm.address),
+              const SizedBox(height: 24),
+              _InfoRow('PIN', vm.pin),
             ],
           ),
         ),
         const SizedBox(height: 40),
-        _StatusRow(state: state),
+        _StatusRow(state: vm.state),
         const SizedBox(height: 40),
         const Text(
           'Leave this app. It keeps running in the background.',
@@ -234,14 +210,14 @@ class _StatusRow extends StatelessWidget {
       ),
       if (state == TvState.receiving) ...[
         const SizedBox(width: 20),
-        const _Eq(),
+        const _Eq(key: Key('eq')),
       ],
     ],
   );
 }
 
 class _Eq extends StatefulWidget {
-  const _Eq();
+  const _Eq({super.key});
 
   @override
   State<_Eq> createState() => _EqState();
