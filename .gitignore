@@ -19,3 +19,8 @@ build/
 *.textClipping
 .tokensave/
 plan/
+
+# Local Gradle state at the repo root (IDE accidents)
+/.gradle/
+/local.properties
+/settings.gradle

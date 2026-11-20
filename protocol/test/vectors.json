@@ -1,0 +1,6 @@
+[
+  {"name": "hello", "hex": "544d010101000000655e0700", "type": "hello", "seq": 1, "pin": 482917, "payloadHex": ""},
+  {"name": "end", "hex": "544d010303000000655e0700", "type": "end", "seq": 3, "pin": 482917, "payloadHex": ""},
+  {"name": "reject", "hex": "544d010400000000655e0700", "type": "reject", "seq": 0, "pin": 482917, "payloadHex": ""},
+  {"name": "ack", "hex": "544d010202000000655e07004368726f6d6563617374", "type": "ack", "seq": 2, "pin": 482917, "payloadHex": "4368726f6d6563617374"}
+]
