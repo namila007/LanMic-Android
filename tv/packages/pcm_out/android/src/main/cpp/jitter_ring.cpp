@@ -229,6 +229,11 @@ void JitterRing::startFrame(uint32_t gen, int64_t nowNs) {
         }
         lost_.fetch_add(1, std::memory_order_relaxed);
         playPlc();
+        if (!(s.present & ~1u)) {  // nothing newer: the frame is late, not lost. Hold it so playout slips later.
+            cHave_ = true;
+            cPos_ = 0;
+            return;
+        }
     }
     advance();
     cHave_ = true;

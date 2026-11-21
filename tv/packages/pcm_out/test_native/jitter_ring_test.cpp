@@ -92,6 +92,23 @@ void underrun_counts_only_within_grace() {
     assert(f.readFrame(T0 + 170 * MS) == 0);
 }
 
+// Seen on the Chromecast: every frame lands just after the consumer wanted it. One underrun must
+// shift playout later for good, not turn every following frame into "late" + PLC.
+void late_arrivals_shift_playout_once() {
+    Fx f;
+    f.push(0, 1000, T0);
+    f.push(1, 1000, T0 + 10 * MS);
+    for (uint32_t k = 0; k < 60; ++k) {
+        const int64_t readAt = T0 + 10 * MS + int64_t(k) * 10 * MS;  // read k wants frame k
+        f.readFrame(readAt);
+        if (k >= 2) f.push(k, 1000, readAt + 2 * MS);  // frame k lands 2 ms after its read
+    }
+    auto c = f.ring.counters();
+    assert(c.late == 0);
+    assert(c.lost <= 1);
+    assert(c.played >= 58);
+}
+
 void idle_returns_to_wait_for_target() {
     Fx f;
     f.push(0, 5000, T0);
@@ -312,6 +329,7 @@ int main() {
     gap_plays_plc_and_counts_lost();
     plc_fades_to_silence_after_3();
     underrun_counts_only_within_grace();
+    late_arrivals_shift_playout_once();
     idle_returns_to_wait_for_target();
     duplicates_and_late_are_not_lost();
     drain_skips_quiet_frame_when_above_target();
