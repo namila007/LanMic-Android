@@ -8,8 +8,8 @@ Use your Android phone as a live wireless microphone for your Android TV. Your v
     <th>TV: LAN Mic Receiver</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/phone-mic.png" alt="Phone app: connection stats card with delay, Mic boost slider, talk button" width="260"></td>
-    <td><img src="docs/screenshots/tv-receiver-stats.png" alt="TV app: address and PIN, Receiving audio, delay and lost-audio stats, Voice volume +3 dB" width="520"></td>
+    <td><img src="docs/screenshots/phone-mic-stats.png" alt="Phone app: live, connection stats card (Delay about 73 ms, Good), Mic boost slider, talk button" width="260"></td>
+    <td><img src="docs/screenshots/tv-receiver-stats.png" alt="TV app: address and PIN, Receiving audio, Delay about 88 ms Good, Lost audio, Voice volume +3 dB" width="520"></td>
   </tr>
 </table>
 
