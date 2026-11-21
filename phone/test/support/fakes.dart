@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:lanmic/data/services/audio_focus.dart';
 import 'package:lanmic/data/services/foreground_service.dart';
@@ -10,27 +9,6 @@ import 'package:lanmic/domain/link_stats.dart';
 import 'package:lanmic/domain/phone_state.dart';
 
 import 'package:lanmic/data/services/mic_service.dart';
-
-class FakePcmSource implements PcmSource {
-  final controller = StreamController<Uint8List>.broadcast();
-  Completer<void>? startGate;
-  Object? startError;
-  int starts = 0;
-  int stops = 0;
-
-  @override
-  Future<void> start() async {
-    starts++;
-    if (startError != null) throw startError!;
-    await startGate?.future;
-  }
-
-  @override
-  Future<void> stop() async => stops++;
-
-  @override
-  Stream<Uint8List> get pcm => controller.stream;
-}
 
 class FakeSession implements SessionService {
   FakeSession(this.log);
@@ -71,19 +49,16 @@ class FakeSession implements SessionService {
   }
 
   @override
-  void beginTalk() => log.add('begin');
-  @override
-  void sendEnd() => log.add('end');
-  @override
-  void sendAudio(Uint8List frame960) {}
+  void Function() endSender() => () => log.add('end');
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-class FakeMic implements MicService {
+class FakeMic implements Mic {
   FakeMic(this.log);
   final List<String> log;
   Completer<void>? openGate;
+  Completer<void>? closeGate; // holds close() open: the capture is still draining
   bool failOpen = false;
   bool autoLevel =
       false; // emit PCM-like activity so the stall watchdog stays quiet
@@ -120,10 +95,10 @@ class FakeMic implements MicService {
     _auto?.cancel();
     _closedWhileOpening = openGate != null && !(openGate!.isCompleted);
     _open = false;
+    await closeGate?.future;
+    if (closeGate != null) log.add('mic.closed');
   }
 
-  @override
-  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
 class FakePerms implements PermissionService {

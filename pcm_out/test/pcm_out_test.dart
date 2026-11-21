@@ -90,4 +90,72 @@ void main() {
     await a.cancel();
     await b.cancel();
   });
+
+  test('capture start maps error codes to PlatformException', () async {
+    final c = NativeCapture();
+    await c.start();
+    expect(calls.last.method, 'captureStart');
+    for (final code in ['open_failed', 'format_unsupported']) {
+      mock((_) async => throw PlatformException(code: code));
+      await expectLater(
+        c.start(),
+        throwsA(isA<PlatformException>().having((e) => e.code, 'code', code)),
+      );
+    }
+    mock((_) async => null);
+    await c.stop();
+    expect(calls.last.method, 'captureStop');
+  });
+
+  test('setTarget passes host/port/pin and null clears', () async {
+    final c = NativeCapture();
+    await c.setTarget('192.168.1.7', 5004, 482917);
+    expect(calls.last.method, 'setTarget');
+    expect(calls.last.arguments, {'host': '192.168.1.7', 'port': 5004, 'pin': 482917});
+    await c.setTarget(null, 0, 0);
+    expect(calls.last.arguments, {'host': null, 'port': 0, 'pin': 0});
+  });
+
+  test('CaptureStats maps -1 to null and permille to 0..1', () async {
+    mock((_) async => [1, -1, 100, 99, 2, 3, -1, 250, 40, 50, -540, -205, -1, 0, 192, 1]);
+    final s = await NativeCapture().stats();
+    expect(calls.last.method, 'captureStats');
+    expect(s.capturing, true);
+    expect(s.inputLatencyMs, isNull);
+    expect((s.framesCaptured, s.framesSent, s.framesDropped, s.sendErrors), (100, 99, 2, 3));
+    expect(s.sendGapMaxMs, isNull);
+    expect(s.levelRms, 0.25);
+    expect((s.gateOpenFrames, s.gateFrames), (40, 50));
+    expect((s.gateMinDb, s.gateMaxDb), (-54.0, -20.5));
+    expect(s.mmap, isNull);
+    expect((s.exclusive, s.burst, s.xruns), (false, 192, 1));
+
+    mock((_) async => [0, 12, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 1, 1, 96, 0]);
+    final t = await NativeCapture().stats();
+    expect((t.capturing, t.inputLatencyMs, t.sendGapMaxMs, t.mmap, t.exclusive), (false, 12, 10, true, true));
+  });
+
+  test('socketEvents carries the bound port', () async {
+    late MockStreamHandlerEventSink sink;
+    messenger.setMockStreamHandler(events, MockStreamHandler.inline(onListen: (_, s) => sink = s));
+    final r = NativeReceiver();
+    final lines = <String>[];
+    final ports = <int>[];
+    final a = r.socketEvents.listen(lines.add);
+    final b = r.boundPorts.listen(ports.add);
+    await Future<void>.delayed(Duration.zero);
+    sink.success({'event': 'bound', 'message': 'port 43210'});
+    sink.success({'event': 'error', 'message': 'receive failed'});
+    sink.success({'event': 'bound', 'message': 'port 43211'});
+    await Future<void>.delayed(Duration.zero);
+    expect(lines, ['bound: port 43210', 'error: receive failed', 'bound: port 43211']);
+    expect(ports, [43210, 43211]);
+    await a.cancel();
+    await b.cancel();
+  });
+
+  test('rebind invokes the channel', () async {
+    await NativeReceiver().rebind();
+    expect(calls.last.method, 'rebind');
+  });
 }

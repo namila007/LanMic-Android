@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lanmic/data/services/permission_service.dart';
@@ -127,8 +128,8 @@ void main() {
     await settle();
     vm.releaseTalk();
     expect(vm.state, PhoneState.connected);
+    await settle(); // END goes out after the capture stopped
     expect(log, [
-      'begin',
       'focus.on',
       'mic.open',
       'mic.close',
@@ -136,6 +137,19 @@ void main() {
       'end',
       'end',
     ]);
+  });
+
+  test('stop capture completes before END is sent', () async {
+    await connected();
+    mic.closeGate = Completer<void>();
+    vm.pressTalk();
+    await settle();
+    vm.releaseTalk();
+    await settle();
+    expect(log, isNot(contains('end'))); // the capture is still draining
+    mic.closeGate!.complete();
+    await settle();
+    expect(log, containsAllInOrder(['mic.close', 'mic.closed', 'end', 'end']));
   });
 
   test(
@@ -184,6 +198,7 @@ void main() {
     vm.pressTalk();
     await settle();
     vm.setMode(TalkMode.keep);
+    await settle();
     expect(vm.state, PhoneState.connected);
     expect(vm.mode, TalkMode.keep);
     expect(log.where((l) => l == 'end').length, 2);
@@ -270,7 +285,7 @@ void main() {
         await live(TalkMode.keep);
         expect(
           log,
-          containsAllInOrder(['begin', 'fgs.start Living Room', 'mic.open']),
+          containsAllInOrder(['fgs.start Living Room', 'mic.open']),
         );
         vm.tapTalk();
         await settle();
@@ -287,6 +302,7 @@ void main() {
     test('paused in hold closes with END x2; in keep stays live', () async {
       await live(TalkMode.hold);
       vm.onLifecycle(AppLifecycleState.paused);
+      await settle();
       expect(vm.state, PhoneState.connected);
       expect(log.where((l) => l == 'end').length, 2);
       await live(TalkMode.keep);
@@ -317,6 +333,49 @@ void main() {
       await vm.disconnect();
       await settle();
       expect(log, containsAll(['mic.close', 'fgs.stop', 'end', 'disconnect']));
+    });
+
+    // END must follow mic.close completing, whatever closed the talk.
+    final closers = <String, void Function()>{
+      'Stop pressed': () => fgs.stopController.add(null),
+      'disconnect': () => unawaited(vm.disconnect()),
+      'lifecycle pause (hold)': () => vm.onLifecycle(AppLifecycleState.paused),
+      'phone-call interruption': () => vm.onInterruption(true),
+      'focus interruption': () => focus.interrupt.add(null),
+    };
+    closers.forEach((name, close) {
+      test('END waits for the capture drain: $name', () async {
+        await live(name.contains('hold') ? TalkMode.hold : TalkMode.keep);
+        mic.closeGate = Completer<void>();
+        log.clear();
+        close();
+        await settle();
+        expect(log, contains('mic.close'));
+        expect(log, isNot(contains('end'))); // still draining
+        mic.closeGate!.complete();
+        await settle();
+        expect(log, containsAllInOrder(['mic.close', 'mic.closed', 'end', 'end']));
+      });
+    });
+
+    test('a non-format PlatformException shows the generic mic error copy', () async {
+      await connected();
+      mic
+        ..failOpen = true
+        ..error = PlatformException(code: 'open_failed');
+      vm.pressTalk();
+      await settle();
+      expect(vm.micError, 'Could not start the microphone.');
+    });
+
+    test('a format error shows its own copy', () async {
+      await connected();
+      mic
+        ..failOpen = true
+        ..error = "This phone's microphone format isn't supported.";
+      vm.pressTalk();
+      await settle();
+      expect(vm.micError, "This phone's microphone format isn't supported.");
     });
 
     test('notifications denied in keep: flagged, still live', () async {

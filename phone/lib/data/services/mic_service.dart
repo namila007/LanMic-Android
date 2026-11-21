@@ -1,128 +1,116 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:typed_data';
 
-import 'package:lanmic/domain/frame_slicer.dart';
-import 'package:record/record.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:lanmic/domain/send_error_monitor.dart';
+import 'package:pcm_out/pcm_out.dart';
 
-abstract class PcmSource {
-  Future<void> start();
-  Future<void> stop();
-  Stream<Uint8List> get pcm;
+abstract class Mic {
+  Future<void> open();
+  Future<void> close();
+  bool get isOpen;
+  Object? get error;
+  Stream<double> get level;
 }
 
-/// 48 kHz mono PCM16 from the phone mic, processing off (raw voice, low latency).
-class RecordPcmSource implements PcmSource {
-  final _rec = AudioRecorder();
-  Stream<Uint8List>? _stream;
+const _formatError = "This phone's microphone format isn't supported.";
 
-  @override
-  Future<void> start() async {
-    _stream = await _rec.startStream(
-      const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 48000,
-        numChannels: 1,
-        androidConfig: AndroidRecordConfig(audioSource: AndroidAudioSource.mic),
-        echoCancel: false,
-        noiseSuppress: false,
-        autoGain: false,
-        // record must not request audio focus itself: it would steal the
-        // app's own focus (AudioFocus) and look like a phone call.
-        audioInterruption: AudioInterruptionMode.none,
-      ),
-    );
-  }
+/// Starts/stops the native capture (Oboe input + sender thread) and polls its stats at 10 Hz for the level meter.
+class MicService implements Mic {
+  MicService({
+    required this.capture,
+    this.onStats,
+    this.rebind,
+    this.pollEvery = const Duration(milliseconds: 100),
+  });
 
-  @override
-  Future<void> stop() async {
-    await _rec.stop();
-  }
+  final NativeCapture capture;
+  final void Function(CaptureStats)? onStats;
+  final Future<void> Function()? rebind; // called once per run of send errors
+  final Duration pollEvery;
 
-  @override
-  Stream<Uint8List> get pcm => _stream ?? const Stream.empty();
-}
-
-/// Opens/closes the capture and emits exact 960 B frames only while open.
-class MicService {
-  MicService({required this.source, required this.onFrame});
-
-  final PcmSource source;
-  final void Function(Uint8List frame) onFrame;
-
-  final _slicer = FrameSlicer();
   final _level = StreamController<double>.broadcast();
-  StreamSubscription<Uint8List>? _sub;
+  final _errors = SendErrorMonitor();
+  Timer? _timer;
+  bool _polling = false;
+  DateTime? _lastPollLog;
   Future<void> _chain = Future.value();
   int _epoch = 0; // bumped by close(); makes an in-flight open() a no-op
   bool _open = false;
   bool _started = false;
+  @override
   Object? error;
 
+  @override
   bool get isOpen => _open;
+  @override
   Stream<double> get level => _level.stream;
 
+  @override
   Future<void> open() {
     final e = _epoch;
     return _run(() => _doOpen(e));
   }
 
+  @override
   Future<void> close() {
     _epoch++;
-    _open = false; // frames stop immediately, before the async teardown runs
+    _open = false; // the level stops immediately, before the async teardown runs
+    _timer?.cancel();
     return _run(_doClose);
   }
 
-  // Serialised so a start can never overlap a stop on the recorder.
-  Future<void> _run(Future<void> Function() f) =>
-      _chain = _chain.then((_) => f());
+  // Serialised so a start can never overlap a stop on the native capture.
+  Future<void> _run(Future<void> Function() f) => _chain = _chain.then((_) => f());
 
   Future<void> _doOpen(int e) async {
     if (e != _epoch || _open) return;
     error = null;
     try {
-      await source.start();
+      await capture.start();
       _started = true;
+    } on PlatformException catch (err) {
+      error = err.code == 'format_unsupported' ? _formatError : err;
+      return;
     } on Object catch (err) {
       error = err;
       return;
     }
     if (e != _epoch) return _doClose();
-    _slicer.reset();
     _open = true;
-    _sub = source.pcm.listen(_onChunk);
+    _timer = Timer.periodic(pollEvery, (_) => unawaited(_poll()));
   }
 
   Future<void> _doClose() async {
-    await _sub?.cancel();
-    _sub = null;
-    _slicer.reset();
+    _timer?.cancel();
     if (!_started) return;
     _started = false;
     try {
-      await source.stop();
+      await capture.stop(); // returns after the last frame was sent: END may follow
     } on Object catch (err) {
       error = err;
     }
   }
 
-  void _onChunk(Uint8List chunk) {
-    if (!_open) return;
-    _level.add(_rms(chunk));
-    for (final f in _slicer.add(chunk)) {
-      onFrame(f);
+  Future<void> _poll() async {
+    if (_polling) return;
+    _polling = true;
+    try {
+      final s = await capture.stats();
+      if (!_open) return;
+      _level.add(min(1.0, s.levelRms * 4)); // same scale as the old RMS meter
+      onStats?.call(s);
+      if (_errors.add(s.sendErrors)) await rebind?.call();
+    } on Object catch (err) {
+      // a failed poll just skips one meter update; log at most every 10 s
+      final now = DateTime.now();
+      if (_lastPollLog == null || now.difference(_lastPollLog!) >= const Duration(seconds: 10)) {
+        _lastPollLog = now;
+        debugPrint('mic poll failed: $err');
+      }
+    } finally {
+      _polling = false;
     }
-  }
-
-  static double _rms(Uint8List b) {
-    final bd = ByteData.sublistView(b);
-    final n = b.length ~/ 2;
-    if (n == 0) return 0;
-    var sum = 0.0;
-    for (var i = 0; i < n; i++) {
-      final s = bd.getInt16(i * 2, Endian.little);
-      sum += s * s;
-    }
-    return min(1.0, sqrt(sum / n) / 32768);
   }
 }

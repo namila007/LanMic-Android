@@ -176,4 +176,16 @@ void main() {
     mm.tick(at(100));
     expect(n, 1);
   });
+
+  test('rebound: HELLO now, state kept, 6 s lost timeout unchanged; ignored when idle', () {
+    m.rebound(at(0));
+    expect(hellos, 0);
+    m.connect(at(0));
+    m.onAck(null, at(100));
+    m.rebound(at(5000));
+    expect(m.state, PhoneState.connected);
+    expect(hellos, 2);
+    m.tick(at(6200));
+    expect(m.state, PhoneState.lost); // measured from the last ACK, not from the rebind
+  });
 }

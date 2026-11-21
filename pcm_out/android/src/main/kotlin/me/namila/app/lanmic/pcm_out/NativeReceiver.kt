@@ -1,6 +1,7 @@
 package me.namila.app.lanmic.pcm_out
 
 import android.os.Handler
+import android.os.ParcelFileDescriptor
 import android.os.Looper
 import android.os.Process
 import io.flutter.plugin.common.EventChannel
@@ -42,6 +43,10 @@ object NativeReceiver {
     @Volatile private var socket: DatagramSocket? = null
     @Volatile private var accepted: Accepted? = null
     @Volatile var sink: EventChannel.EventSink? = null
+    @Volatile private var rebindingSocket: DatagramSocket? = null // rebind() closed exactly this socket on purpose
+    @Volatile private var lastBound: String? = null // "port N": replayed to a late listener or a new engine
+    private val sleepLock = Object()
+    private var wake = false // sleepLock: rebind() during a back-off sleep skips the rest of it
 
     // Non-AUDIO packets forwarded to the main thread: small and rate-limited so a flood cannot swamp it.
     private var windowStartNs = 0L
@@ -51,7 +56,10 @@ object NativeReceiver {
 
     @Synchronized
     fun start(port: Int) {
-        if (alive?.get() == true) return
+        if (alive?.get() == true) {
+            replayBound() // already running: a new engine still has to learn the port
+            return
+        }
         val flag = AtomicBoolean(true)
         alive = flag
         thread = Thread({ run(port, flag) }, "lanmic-udp").also { it.start() }
@@ -66,6 +74,29 @@ object NativeReceiver {
         socket?.close()
         t?.interrupt() // ends a backoff sleep at once
         t?.join(1000)
+        lastBound = null
+        // Phone mode: native must not keep sending from a dead socket's dup or to an old target.
+        NativeAudio.nativeSetTarget(null, 0, 0)
+        NativeAudio.nativeSetSendFd(-1)
+    }
+
+    /** Re-emits the last `bound` event, if any (the UI isolate may have subscribed after it fired). */
+    fun replayBound() {
+        lastBound?.let { event("event" to "bound", "message" to it) }
+    }
+
+    /** Closes the socket so the receive loop binds a fresh one at once (a new port when started with 0). */
+    fun rebind() {
+        val s = socket
+        if (s == null) { // between sockets (back-off sleep): bind now
+            synchronized(sleepLock) { wake = true; sleepLock.notifyAll() }
+            return
+        }
+        synchronized(this) {
+            if (socket !== s) return // already replaced
+            rebindingSocket = s
+        }
+        s.close()
     }
 
     /** Null host accepts nobody. Flushes the ring when the accepted phone changes. */
@@ -99,30 +130,49 @@ object NativeReceiver {
             while (alive.get()) {
                 val s = try {
                     // No reuseAddress: a busy port (an old socket not yet gone) just retries with backoff.
-                    DatagramSocket(null).apply {
+                    val sock = DatagramSocket(null).apply {
                         trafficClass = DSCP_EF
                         soTimeout = 200 // wakes the loop so stop() ends it promptly
                         bind(InetSocketAddress(port))
                     }
+                    try {
+                        // Port 0 = the phone: native audio sends from a dup of this very socket (the TV never
+                        // does, or the dup would keep port 5004 busy after a rebind).
+                        if (port == 0) {
+                            NativeAudio.nativeSetTarget(null, 0, 0) // new source port: the TV must hear a HELLO first
+                            val fd = ParcelFileDescriptor.fromDatagramSocket(sock).detachFd()
+                            try {
+                                NativeAudio.nativeSetSendFd(fd)
+                            } catch (e: Throwable) {
+                                ParcelFileDescriptor.adoptFd(fd).close() // native never took it
+                                throw e
+                            }
+                        }
+                    } catch (e: Exception) {
+                        sock.close()
+                        throw if (e is IOException) e else IOException(e)
+                    }
+                    sock
                 } catch (e: IOException) {
                     event("event" to "error", "message" to "bind failed: ${e.message}")
-                    if (!sleep(backoffMs)) break
+                    if (!sleep(backoffMs, alive)) break
                     backoffMs = minOf(backoffMs * 2, 5000L) // boot before Wi-Fi: 1, 2, 4, 5 s
                     continue
                 }
                 if (!alive.get()) { s.close(); break }
                 socket = s
-                backoffMs = 1000L
-                event("event" to "bound", "message" to "port $port")
+                lastBound = "port ${s.localPort}"
+                event("event" to "bound", "message" to lastBound)
                 while (alive.get()) {
                     try {
                         pkt.length = buf.size
                         s.receive(pkt)
+                        backoffMs = 1000L // only a working socket resets the back-off, not a bind
                         handle(buf, pkt, direct)
                     } catch (_: SocketTimeoutException) {
                         continue
                     } catch (e: IOException) {
-                        if (alive.get()) event("event" to "error", "message" to "receive failed: ${e.message}")
+                        if (alive.get() && rebindingSocket !== s) event("event" to "error", "message" to "receive failed: ${e.message}")
                         break
                     } catch (e: Throwable) { // a bad packet must not kill the thread
                         event("event" to "error", "message" to "packet failed: $e")
@@ -130,19 +180,37 @@ object NativeReceiver {
                 }
                 socket = null
                 s.close()
-                if (alive.get() && !sleep(backoffMs)) break // no tight rebind loop after a receive failure
+                if (port == 0) NativeAudio.nativeSetSendFd(-1) // stop sending from the dead socket's dup
+                val deliberate = rebindingSocket === s
+                if (deliberate) rebindingSocket = null
+                if (alive.get() && !deliberate) { // no tight rebind loop after a receive failure
+                    if (!sleep(backoffMs, alive)) break
+                    backoffMs = minOf(backoffMs * 2, 5000L)
+                }
             }
         } catch (e: Throwable) {
             event("event" to "error", "message" to "receiver died: $e")
         } finally {
             socket?.close()
             socket = null
+            if (port == 0) NativeAudio.nativeSetSendFd(-1)
             synchronized(this) { if (this.alive === alive) this.alive = null } // lets start() relaunch it
         }
     }
 
-    /** False if interrupted (stop). */
-    private fun sleep(ms: Long): Boolean = try { Thread.sleep(ms); true } catch (_: InterruptedException) { false }
+    /** False if stopped (or interrupted); a [rebind] during the sleep ends it early. */
+    private fun sleep(ms: Long, alive: AtomicBoolean): Boolean = try {
+        synchronized(sleepLock) {
+            val end = System.nanoTime() + ms * 1_000_000
+            while (!wake && alive.get()) {
+                val left = (end - System.nanoTime()) / 1_000_000
+                if (left <= 0) break
+                sleepLock.wait(left)
+            }
+            wake = false
+        }
+        alive.get()
+    } catch (_: InterruptedException) { false }
 
     private fun handle(b: ByteArray, p: DatagramPacket, direct: ByteBuffer) {
         val n = p.length

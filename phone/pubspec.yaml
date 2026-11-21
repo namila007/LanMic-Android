@@ -16,8 +16,9 @@ dependencies:
     path: ../protocol
   wifi_band:
     path: ../wifi_band
+  pcm_out:
+    path: ../pcm_out
   permission_handler: ^13.0.2
-  record: ^7.2.0
   shared_preferences: ^2.5.6
   wakelock_plus: ^1.8.2
 

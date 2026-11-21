@@ -1,59 +1,46 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:lanmic/data/services/session_service.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
 
-/// Loopback stand-in for the TV: ACKs/REJECTs HELLOs, records everything.
-class FakeTv {
-  FakeTv._(this._socket, this.pin, this.name, this.answer);
+final tvAddress = InternetAddress('192.168.1.5');
 
-  static Future<FakeTv> start({
-    required int pin,
-    String name = 'Living Room',
-    bool answer = true,
-  }) async {
-    final s = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
-    final tv = FakeTv._(s, pin, name, answer);
-    s.listen(tv._onEvent);
-    return tv;
-  }
+/// A [PacketPort] with a stand-in TV behind it: ACKs/REJECTs HELLOs (when [answer]), records everything sent.
+class FakeTv implements PacketPort {
+  FakeTv({this.pin = 482917, this.name = 'Living Room', this.answer = true});
 
-  final RawDatagramSocket _socket;
   final int pin;
   final String name;
   bool answer;
-  final received = <Packet>[];
-  InternetAddress? _lastFrom;
-  int? _lastPort;
+  bool failSends = false;
+  int rebinds = 0;
+  final sent = <Packet>[];
+  final _in = StreamController<Incoming>.broadcast(sync: true);
+  final _bound = StreamController<int>.broadcast(sync: true);
 
-  /// Sends STATS to whoever sent the last HELLO.
-  void sendStats(StatsReport r, {int? pin}) =>
-      sendTo(Packet.stats(0, pin ?? this.pin, r), _lastFrom!, _lastPort!);
+  @override
+  Stream<Incoming> get incoming => _in.stream;
+  @override
+  Stream<int> get boundPorts => _bound.stream;
+  @override
+  Future<void> rebind() async => rebinds++;
 
-  int get port => _socket.port;
-
-  void _onEvent(RawSocketEvent e) {
-    if (e != RawSocketEvent.read) return;
-    final d = _socket.receive();
-    if (d == null) return;
-    final p = decodePacket(d.data);
-    if (p == null) return;
-    received.add(p);
-    if (p.type == PacketType.hello) {
-      _lastFrom = d.address;
-      _lastPort = d.port;
-    }
+  @override
+  Future<void> send(Uint8List bytes, String host, int port) async {
+    if (failSends) throw StateError('send failed');
+    final p = decodePacket(bytes)!;
+    sent.add(p);
     if (p.type != PacketType.hello || !answer) return;
-    sendTo(
-      p.pin == pin ? Packet.ack(p.seq, p.pin, name) : Packet.reject(0, p.pin),
-      d.address,
-      d.port,
-    );
+    receive(p.pin == pin ? Packet.ack(p.seq, p.pin, name) : Packet.reject(0, p.pin));
   }
 
-  void sendTo(Packet p, InternetAddress to, int port) =>
-      _socket.send(encodePacket(p), to, port);
+  void receive(Packet p, {int port = kPort, InternetAddress? from}) =>
+      _in.add((packet: p, from: from ?? tvAddress, port: port));
 
-  int count(PacketType t) => received.where((p) => p.type == t).length;
+  /// The native receiver bound a new socket.
+  void bound(int port) => _bound.add(port);
 
-  void close() => _socket.close();
+  int count(PacketType t) => sent.where((p) => p.type == t).length;
 }

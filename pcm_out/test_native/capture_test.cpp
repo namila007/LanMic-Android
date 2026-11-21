@@ -4,6 +4,8 @@
 #undef NDEBUG
 #include <atomic>
 #include <cassert>
+#include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <chrono>
 #include <cstring>
@@ -191,12 +193,15 @@ void queue_stress() {
     int last = -1;
     for (;;) {
         if (!q.pop(f)) {
-            if (done.load() && !q.pop(f)) break;
-            if (done.load()) { /* got a last frame via the second pop */ } else { std::this_thread::yield(); continue; }
+            if (!done.load()) { std::this_thread::yield(); continue; }
+            if (!q.pop(f)) break;  // the producer is finished and the queue is drained
         }
         assert(all(f, f[0]));
-        // indices wrap at 0x8000: compare modulo with a window
-        if (last >= 0) assert(((int(f[0]) - last) & 0x7fff) != 0);
+        // Indices wrap at 0x8000. They must move forward (drops only skip ahead), by less than half the range.
+        if (last >= 0) {
+            const int d = (int(f[0]) - last) & 0x7fff;
+            assert(d > 0 && d < 0x4000);
+        }
         last = f[0];
         ++popped;
     }
@@ -207,6 +212,7 @@ void queue_stress() {
 }
 }  // namespace
 
+// AudioIn lifecycle (stop during a reopen, null target, fd swap) needs Oboe and a device: tested in Task 6.
 int main(int argc, char** argv) {
     if (argc > 1 && std::string(argv[1]) == "stress") {
         queue_stress();

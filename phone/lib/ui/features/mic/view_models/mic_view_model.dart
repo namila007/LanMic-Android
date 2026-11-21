@@ -35,7 +35,7 @@ class MicViewModel extends ChangeNotifier {
     _gate = TalkGate(
       onOpen: _onOpen,
       onClose: _onClose,
-      sendEnd: session.sendEnd,
+      sendEnd: _sendEnd,
     );
     _sub = session.states.listen(_onSession);
     _linkSub = session.linkUpdates.listen((_) => notifyListeners());
@@ -47,7 +47,7 @@ class MicViewModel extends ChangeNotifier {
   }
 
   final SessionService session;
-  final MicService mic;
+  final Mic mic;
   final PrefsStore prefs;
   final PermissionService perms;
   final ForegroundService fgs;
@@ -196,7 +196,6 @@ class MicViewModel extends ChangeNotifier {
   void _onOpen() {
     _openedAt = now();
     micError = null;
-    session.beginTalk();
     unawaited(_start(++_openToken));
     notifyListeners();
   }
@@ -222,7 +221,7 @@ class MicViewModel extends ChangeNotifier {
     if (token != _openToken) return unawaited(focus.deactivate());
     await mic.open();
     if (token != _openToken || !_gate.isOpen) return;
-    if (!mic.isOpen) return _fail(token, 'Could not start the microphone.');
+    if (!mic.isOpen) return _fail(token, mic.error is String ? mic.error! as String : 'Could not start the microphone.');
     _watchForStall(token);
   }
 
@@ -264,10 +263,19 @@ class MicViewModel extends ChangeNotifier {
     unawaited(fgs.stop());
   }
 
+  // END must not overtake the last audio frame: it goes out only after the capture has stopped and drained.
+  Future<void>? _closing;
+  void _sendEnd() {
+    final end = session.endSender(); // TV and PIN of this moment
+    final c = _closing;
+    if (c == null) return end();
+    unawaited(c.catchError((_) {}).then((_) => end()));
+  }
+
   void _onClose() {
     _openToken++;
     _stopWatch();
-    unawaited(mic.close());
+    _closing = mic.close();
     unawaited(focus.deactivate());
     _stopService();
     notifyListeners();

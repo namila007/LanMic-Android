@@ -38,6 +38,15 @@ class ConnectionMachine {
 
   void disconnect() => _set(PhoneState.disconnected);
 
+  /// The socket was rebound (new source port): the TV knows the old one, so announce at once. The state
+  /// stays as it is (a live talk goes on); the 6 s timeout still decides `lost`. Ignored when idle.
+  void rebound(DateTime now) {
+    final s = _state;
+    if (s != PhoneState.connecting && s != PhoneState.connected && s != PhoneState.lost) return;
+    if (s != PhoneState.connecting) _nextHello = now.add(_heartbeat);
+    sendHello();
+  }
+
   void onAck(String? name, DateTime now) {
     final s = _state;
     if (s != PhoneState.connecting &&

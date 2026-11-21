@@ -1,6 +1,7 @@
 import 'package:lanmic_protocol/lanmic_protocol.dart';
 
-const kPhoneDelayEstimateMs = 40; // shortcut: half the ~80 ms `record` chunk; replace with a measured value in the native-capture work
+const kPhoneDelayEstimateMs = 40; // fallback until the native input latency is known
+const _frameWaitMs = 5; // average wait to fill a 10 ms frame
 const _window = 5;
 const _tooOldAfter = Duration(seconds: 3);
 
@@ -27,7 +28,11 @@ class LinkSnapshot {
 /// RTT from HELLO/ACK pings plus what the TV reports; adds up the total delay.
 class LinkStats {
   LinkStats({this.phoneMs = kPhoneDelayEstimateMs});
-  final int phoneMs;
+  int phoneMs;
+
+  /// Measured input latency plus frame assembly; null falls back to the estimate.
+  void setPhoneLatency(int? inputLatencyMs) =>
+      phoneMs = inputLatencyMs == null ? kPhoneDelayEstimateMs : inputLatencyMs + _frameWaitMs;
 
   final _pending = <int, Duration>{}; // insertion-ordered
   final _rtts = <int>[]; // microseconds

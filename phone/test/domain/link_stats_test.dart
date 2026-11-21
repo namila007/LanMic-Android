@@ -138,4 +138,12 @@ void main() {
   test('default phone part is the per-build estimate', () {
     expect(LinkStats().snapshot(Duration.zero).phoneMs, kPhoneDelayEstimateMs);
   });
+
+  test('phoneMs uses measured input latency + 5, falls back to 40', () {
+    final l = LinkStats();
+    l.setPhoneLatency(10);
+    expect(l.snapshot(Duration.zero).phoneMs, 15);
+    l.setPhoneLatency(null);
+    expect(l.snapshot(Duration.zero).phoneMs, kPhoneDelayEstimateMs);
+  });
 }

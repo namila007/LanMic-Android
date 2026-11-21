@@ -109,10 +109,16 @@ int AudioIn::openStream() {
         ->setErrorCallback(self_);
     std::shared_ptr<oboe::AudioStream> s;
     oboe::Result r = b.openStream(s);
-    if (r != oboe::Result::OK && api29) {  // some devices reject VoicePerformance
-        LOGI("capture open with VoicePerformance failed: %s; trying Unprocessed", oboe::convertToText(r));
-        b.setInputPreset(oboe::InputPreset::Unprocessed);
-        r = b.openStream(s);
+    if (r != oboe::Result::OK) {  // some devices reject the preset: try Unprocessed (API 29 only), then Generic
+        LOGI("capture open failed: %s; retrying with a plainer preset", oboe::convertToText(r));
+        if (api29) {
+            b.setInputPreset(oboe::InputPreset::Unprocessed);
+            r = b.openStream(s);
+        }
+        if (r != oboe::Result::OK) {
+            b.setInputPreset(oboe::InputPreset::Generic);
+            r = b.openStream(s);
+        }
     }
     if (r != oboe::Result::OK) {
         LOGI("capture open failed: %s", oboe::convertToText(r));
@@ -178,6 +184,7 @@ void AudioIn::maybeReopen() {
     reopen_.store(false);
     if (stream_) stream_->close();
     stream_.reset();
+    assembler_.reset();  // the old callback is gone: drop its partial frame before the new stream starts
     if (openStream() == kCaptureOk) {
         backoffNs_ = 100'000'000;
     } else {  // retry with doubling back-off up to 2 s
@@ -201,7 +208,9 @@ void AudioIn::senderMain() {
             std::memcpy(frame, in, sizeof frame);
             double sum = 0;
             for (int16_t v : frame) sum += double(v) * v;
-            levelPermille_.store(int(std::sqrt(sum / kFrameSamples) / 32768 * 1000 + 0.5), std::memory_order_relaxed);
+            // At least 1 for any non-zero input: the stall watchdog tells noise floor from zero-filled call audio.
+            const int permille = int(std::sqrt(sum / kFrameSamples) / 32768 * 1000 + 0.5);
+            levelPermille_.store(sum > 0 ? std::max(1, permille) : 0, std::memory_order_relaxed);
             {
                 std::lock_guard<std::mutex> g(gateMu_);
                 gate_.process(frame);
