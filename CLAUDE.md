@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `protocol/` : pure Dart `lanmic_protocol` (packet codec in `lib/src/packet.dart`, golden `test/vectors.json`, `tool/send_sine.dart` test sender). Both apps depend on it by `path: ../protocol`; keep all packet code here.
 - `phone/` : sender app `lanmic`, package id `me.namila.app.lanmic`, minSdk 26.
 - `tv/` : Android TV receiver `lanmic_tv`, package id `me.namila.app.lanmic.tv`, Android only, leanback + `LEANBACK_LAUNCHER`, banner `res/drawable-xhdpi/banner.png`.
-- `tv/packages/pcm_out/` : local Flutter plugin, Kotlin low-latency `AudioTrack` (`start` / `write` 960 B frames / `stop`).
+- `pcm_out/` : shared local Flutter plugin (TV playout and phone capture): Kotlin `NativeReceiver` UDP socket plus C++ Oboe audio (`liblanmic_audio`), host tests in `pcm_out/tool/test_native.sh`.
 
 Both apps use MVVM (decision D3): `lib/domain` is pure Dart logic (no Flutter imports), `lib/data/services` wraps plugins and sockets, `lib/ui/features/<x>/{view_models,views}`. Tests mirror it under `test/`, with fakes in `test/support`.
 
@@ -25,7 +25,7 @@ Flutter SDK is at `/Users/namila007/namz/sdk/flutter/flutter` (on PATH). Run eac
 ```bash
 flutter pub get
 flutter analyze            # phone/, tv/ (dart analyze in protocol/)
-flutter test               # phone/, tv/, tv/packages/pcm_out (dart test in protocol/)
+flutter test               # phone/, tv/, pcm_out/ (dart test in protocol/)
 flutter test test/foo_test.dart --plain-name "case name"   # single test
 flutter test --exclude-tags integration   # phone: skip the real-socket loopback tests
 flutter build apk --release               # use release builds for any latency/underrun measurement

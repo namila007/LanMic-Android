@@ -78,7 +78,7 @@ cd tv && flutter test && flutter build apk --release
 |---|---|
 | `phone/` | Phone sender app (`me.namila.app.lanmic`) |
 | `tv/` | Android TV receiver app (`me.namila.app.lanmic.tv`) |
-| `tv/packages/pcm_out/` | Local plugin: low‑latency `AudioTrack` playback (Kotlin) |
+| `pcm_out/` | Local plugin: low‑latency `AudioTrack` playback (Kotlin) |
 | `protocol/` | Shared Dart packet codec used by both apps |
 
 **Wire protocol:** UDP on port 5004, little‑endian, with a 12‑byte header (magic `0x4D54`, version 1, type, seq, PIN) followed by the payload.

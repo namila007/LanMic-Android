@@ -354,7 +354,7 @@ packages:
   pcm_out:
     dependency: "direct main"
     description:
-      path: "packages/pcm_out"
+      path: "../pcm_out"
       relative: true
     source: path
     version: "0.0.1"
