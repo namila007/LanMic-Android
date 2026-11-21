@@ -37,4 +37,17 @@ private:
     int fill_ = 0;
 };
 
+// Sender-thread body. `stopping` is read BEFORE draining: everything pushed before it was set (the input is
+// closed first) is then visible, so the final pass sends every queued frame and the loop returns only after.
+template <class Wait, class Send>
+void senderLoop(FrameQueue& q, const std::atomic<bool>& stopping, Wait wait, Send send) {
+    int16_t f[kFrameSamples];
+    for (;;) {
+        const bool last = stopping.load(std::memory_order_acquire);
+        while (q.pop(f)) send(f);
+        if (last) return;
+        wait();
+    }
+}
+
 }  // namespace lanmic

@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstdio>
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -152,6 +153,24 @@ void packet_matches_protocol_vector() {
     assert(p[4] == 0xEF && p[5] == 0xBE && p[6] == 0xAD && p[7] == 0xDE);
 }
 
+// The sender loop must send every frame queued before `stopping` was set, in order, before it returns.
+void stop_drains_before_return() {
+    FrameQueue q;
+    std::atomic<bool> stopping{false};
+    std::vector<int> sent;
+    std::thread sender([&] {
+        senderLoop(q, stopping, [] { std::this_thread::sleep_for(std::chrono::milliseconds(1)); },
+                   [&](const int16_t* f) { sent.push_back(f[0]); });
+    });
+    int16_t f[kFrameSamples];
+    for (int i = 0; i < kQueueSlots; ++i) { fill(f, int16_t(i)); assert(q.push(f)); }
+    stopping.store(true, std::memory_order_release);  // stopCapture: the input is already closed here
+    sender.join();                                    // returns only when the queue is empty
+    assert(sent.size() == size_t(kQueueSlots));
+    for (int i = 0; i < kQueueSlots; ++i) assert(sent[size_t(i)] == i);
+    assert(!q.pop(f));
+}
+
 // One producer pushes 10^6 frames filled with their index (drops when full); the consumer checks every
 // popped frame is uniform and indices only increase.
 void queue_stress() {
@@ -200,5 +219,6 @@ int main(int argc, char** argv) {
     gate_fades_over_one_frame();
     gate_stats_reset_on_read();
     packet_matches_protocol_vector();
+    stop_drains_before_return();
     std::puts("capture_test: all passed");
 }

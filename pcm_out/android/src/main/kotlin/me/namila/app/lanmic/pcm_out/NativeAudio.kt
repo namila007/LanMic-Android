@@ -23,4 +23,25 @@ object NativeAudio {
     external fun nativePush(buf: ByteBuffer, seq: Int, nowNs: Long)
     external fun nativeFlush()
     external fun nativeStats(out: LongArray)
+
+    /**
+     * Index order of [nativeCaptureStats] (matches CaptureStatIndex in audio_in.h): capturing (0/1),
+     * inputLatencyMs (-1 unknown), framesCaptured, framesSent, framesDropped, sendErrors, sendGapMaxMs
+     * (last 1 s, -1 none), levelRmsPermille, gateOpenFrames, gateFrames, gateMinDbX10, gateMaxDbX10
+     * (the gate fields reset on read), mmap (0/1, -1 unknown), exclusive (0/1), burst, xruns.
+     */
+    const val CAPTURE_STATS_SIZE = 16
+
+    /** 0 ok, -1 open failed, -2 format unsupported. Phone only. */
+    external fun nativeCaptureStart(): Int
+
+    /** Synchronous: returns after every queued frame was sent, so END can follow safely. */
+    external fun nativeCaptureStop()
+
+    /** Native sends audio only while capturing and a target is set. A null [host] clears the target. */
+    external fun nativeSetTarget(host: String?, port: Int, pin: Int)
+
+    /** Hands over a dup of the UDP socket fd; native owns it and closes it on the next swap. */
+    external fun nativeSetSendFd(fd: Int)
+    external fun nativeCaptureStats(out: LongArray)
 }
