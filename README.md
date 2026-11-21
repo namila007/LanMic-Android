@@ -1,5 +1,17 @@
 # LAN Mic
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/9f9f1140-5d07-40d9-a393-8c1fed8e18b9/deploy-status)](https://app.netlify.com/projects/lanmicapp/deploys)
+[![Latest release](https://img.shields.io/github/v/release/namila007/LanMic-Android?style=for-the-badge&color=d1fe17&labelColor=131517)](https://github.com/namila007/LanMic-Android/releases/latest)
+
+![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
+![Android TV](https://img.shields.io/badge/Android%20TV-3DDC84?style=for-the-badge&logo=androidtv&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-%230175C2.svg?style=for-the-badge&logo=dart&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-0095D5?style=for-the-badge&logo=kotlin&logoColor=white)
+![C++](https://img.shields.io/badge/C++-%2300599C.svg?style=for-the-badge&logo=c%2B%2B&logoColor=white)
+![Astro](https://img.shields.io/badge/Astro-0C1222?style=for-the-badge&logo=astro&logoColor=FDFDFE)
+![Netlify](https://img.shields.io/badge/Netlify-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)
+
 Use your Android phone as a live wireless microphone for your Android TV. Your voice goes over your home Wi‑Fi and plays on the TV in near real time. No cables, no Bluetooth, no extra hardware.
 
 <table>

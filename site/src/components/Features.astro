@@ -26,8 +26,11 @@ const bars = Array.from({ length: 40 }, (_, i) => {
         <div class="vis card">
           <p class="count mono"><span class="num" aria-hidden="true"></span><span class="sr">75</span> ms</p>
           <div class="seg" role="img" aria-label="Delay split: phone about 7 ms, Wi-Fi about 6 ms, TV jitter buffer about 20 ms, TV output about 42 ms">
-            <i style="flex:7"><b>Phone ~7</b></i><i style="flex:6"><b>Wi-Fi ~6</b></i><i style="flex:20"><b>TV buffer ~20</b></i><i style="flex:42"><b>TV output ~42</b></i>
+            <i style="flex:7"><b>7</b></i><i style="flex:6"><b>6</b></i><i style="flex:20"><b>20</b></i><i style="flex:42"><b>42</b></i>
           </div>
+          <ul class="legend" aria-hidden="true">
+            <li><i></i>Phone ~7 ms</li><li><i></i>Wi-Fi ~6 ms</li><li><i></i>TV buffer ~20 ms</li><li><i></i>TV output ~42 ms</li>
+          </ul>
           <div class="stat">
             <span class="muted">Delay</span><b>about 73 ms</b><span class="chip good">Good</span>
             <span class="muted">Network</span><b>11 ms</b><i></i>
@@ -152,6 +155,10 @@ const bars = Array.from({ length: 40 }, (_, i) => {
   .seg i:nth-child(odd) { background: var(--surface-elevated); }
   .seg i:last-child { background: var(--brand-tint); }
   .seg b { font: 400 11px var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: clip; color: var(--text-primary); }
+  .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px var(--space-4); font: 400 12px var(--font-mono); color: var(--text-secondary); }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-elevated); box-shadow: var(--shadow-hairline); }
+  .legend li:nth-child(even) i { background: var(--brand-tint); }
   .stat { display: grid; grid-template-columns: auto 1fr auto; gap: 6px var(--space-4); align-items: center; background: var(--app-bg); border-radius: var(--radius-md); padding: var(--space-4); color: var(--app-text); font-size: 14px; }
   .stat b { color: #fff; font-weight: 500; }
 
