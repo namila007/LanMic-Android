@@ -1,0 +1,122 @@
+---
+import { hero } from '../content/copy';
+---
+
+<div class="scene-wrap">
+  <div
+    class="scene"
+    data-scene
+    data-typed
+    data-connected
+    data-talking
+    data-badge
+    role="img"
+    aria-label={hero.sceneLabel}
+  >
+    <div class="badge mono" aria-hidden="true">~<span data-ms>75</span> ms</div>
+
+    <div class="phone" aria-hidden="true">
+      <div class="phone-notch"></div>
+      <div class="chip-status"><i></i><span class="off">Not connected</span><span class="on">Connected</span></div>
+      <div class="field"><small>TV address</small><b class="val">192.168.1.42</b></div>
+      <div class="field"><small>PIN</small><b class="val">482917</b></div>
+      <div class="connect">Connect</div>
+      <div class="mic"><span class="ring"></span><span class="ring r2"></span>
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+      </div>
+    </div>
+
+    <svg class="link" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+      <line class="rail" x1="0" y1="20" x2="100" y2="20" pathLength="1" />
+      <circle class="pkt p1" cx="0" cy="20" r="2.2" />
+      <circle class="pkt p2" cx="0" cy="20" r="2.2" />
+      <circle class="pkt p3" cx="0" cy="20" r="2.2" />
+    </svg>
+    <svg class="wifi" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/>
+    </svg>
+
+    <div class="tv" aria-hidden="true">
+      <div class="tv-screen">
+        <div class="tv-title">LAN Mic</div>
+        <div class="tv-line">Address <b>192.168.1.42</b></div>
+        <div class="tv-line">PIN <b>482917</b></div>
+        <div class="tv-recv">
+          <span>Receiving audio</span>
+          <div class="eq"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <div class="tv-stand"></div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  .scene-wrap { display: grid; gap: var(--space-3); justify-items: center; }
+  .scene {
+    position: relative; width: 100%; max-width: 560px;
+    display: grid; grid-template-columns: 30% 1fr 46%; align-items: center; gap: 0;
+    padding: 36px 8px 8px; transition: opacity 0.5s;
+  }
+  .scene[data-fade] { opacity: 0; }
+  .badge {
+    position: absolute; top: 0; right: 0; background: var(--brand); color: var(--on-brand);
+    padding: 6px 12px; border-radius: var(--radius-full); font-size: 14px; opacity: 0; transform: scale(0.9);
+    transition: opacity 0.4s, transform 0.4s;
+  }
+  .scene[data-badge] .badge { opacity: 1; transform: none; }
+
+  .phone {
+    aspect-ratio: 9 / 19; background: var(--app-bg); border-radius: 22px; padding: 18px 8px 8px;
+    box-shadow: 0 0 0 3px #3a3a3d, var(--shadow-card); display: grid; align-content: start; gap: 6px; position: relative;
+    font-size: 9px; line-height: 1.2; color: var(--app-text);
+  }
+  .phone-notch { position: absolute; top: 6px; left: 50%; width: 22px; height: 5px; margin-left: -11px; border-radius: 3px; background: #111; }
+  .chip-status { display: flex; align-items: center; gap: 4px; background: var(--app-card); padding: 4px 6px; border-radius: 999px; }
+  .chip-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--app-amber); }
+  .chip-status .on { display: none; }
+  .scene[data-connected] .chip-status i { background: var(--app-green); }
+  .scene[data-connected] .chip-status .on { display: inline; }
+  .scene[data-connected] .chip-status .off { display: none; }
+  .field { background: var(--app-card); border-radius: 6px; padding: 5px 6px; }
+  .field small { display: block; opacity: 0.7; font-size: 7px; }
+  .val { opacity: 0; transition: opacity 0.4s; color: #fff; font-weight: 500; }
+  .scene[data-typed] .val { opacity: 1; }
+  .connect { background: var(--app-blue-deep); color: #fff; text-align: center; border-radius: 6px; padding: 5px; font-weight: 600; transition: transform 0.2s; }
+  .scene[data-connected] .connect { transform: scale(0.96); }
+  .mic {
+    position: relative; margin: 6px auto 0; width: 44px; height: 44px; border-radius: 50%;
+    background: #555; display: grid; place-items: center; transition: background 0.3s;
+  }
+  .scene[data-talking] .mic { background: var(--app-red); }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--app-red); opacity: 0; }
+  .scene[data-talking] .ring { animation: ring 1.6s ease-out infinite; }
+  .scene[data-talking] .r2 { animation-delay: 0.8s; }
+  @keyframes ring { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.9); opacity: 0; } }
+
+  .link { width: 100%; height: 40px; overflow: visible; }
+  .rail { stroke: var(--brand); stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 1; vector-effect: non-scaling-stroke; transition: stroke-dashoffset 0.8s; }
+  .scene[data-connected] .rail { stroke-dashoffset: 0; stroke-dasharray: 0.04 0.03; }
+  .pkt { fill: var(--brand); opacity: 0; }
+  .scene[data-talking] .pkt { animation: pkt 1.2s linear infinite; }
+  .p2 { animation-delay: 0.4s !important; } .p3 { animation-delay: 0.8s !important; }
+  @keyframes pkt { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(100px); opacity: 0; } }
+  .wifi { position: absolute; left: 30%; margin-left: 4%; top: 50%; transform: translateY(-190%); color: var(--text-secondary); }
+
+  .tv-screen {
+    aspect-ratio: 16 / 9; background: var(--app-bg); border-radius: 8px; box-shadow: 0 0 0 4px #1a1a1c, var(--shadow-card);
+    padding: 8px 10px; display: grid; align-content: center; gap: 2px; font-size: 9px; color: var(--app-text);
+  }
+  .tv-title { color: #fff; font-weight: 600; font-size: 11px; }
+  .tv-line b { color: #fff; font-weight: 500; }
+  .tv-recv { margin-top: 4px; display: none; align-items: center; gap: 8px; color: var(--app-green); }
+  .scene[data-talking] .tv-recv { display: flex; }
+  .eq { display: flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .eq i { width: 3px; height: 14px; background: var(--app-green); border-radius: 1px; transform-origin: bottom; transform: scaleY(0.5); }
+  .scene[data-talking] .eq i { animation: eq 0.7s ease-in-out infinite alternate; }
+  .eq i:nth-child(2) { animation-delay: 0.1s; } .eq i:nth-child(3) { animation-delay: 0.25s; }
+  .eq i:nth-child(4) { animation-delay: 0.05s; } .eq i:nth-child(5) { animation-delay: 0.3s; } .eq i:nth-child(6) { animation-delay: 0.15s; }
+  @keyframes eq { from { transform: scaleY(0.2); } to { transform: scaleY(1); } }
+  .tv-stand { width: 30%; height: 6px; margin: 4px auto 0; background: #2a2a2c; border-radius: 0 0 4px 4px; }
+</style>

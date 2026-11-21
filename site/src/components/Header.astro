@@ -1,0 +1,30 @@
+---
+import { nav, REPO, RELEASES_LATEST } from '../content/copy';
+---
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top" aria-label="LAN Mic, top of page">
+      <img src="/favicon-32x32.png" width="28" height="28" alt="" />
+      <span>LAN Mic</span>
+    </a>
+    <nav aria-label="Main navigation">
+      {nav.map((n) => <a href={n.href}>{n.label}</a>)}
+    </nav>
+    <div class="actions">
+      <a class="btn btn-ghost btn-sm" href={REPO} rel="noopener noreferrer">GitHub</a>
+      <a class="btn btn-primary btn-sm" href={RELEASES_LATEST} rel="noopener noreferrer">Download</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  header { position: sticky; top: 0; z-index: 50; background: #0f1113d9; backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-subtle); }
+  .bar { display: flex; align-items: center; gap: var(--space-6); height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--text-primary); text-decoration: none; font: 700 18px var(--font-display); text-transform: uppercase; }
+  nav { display: none; gap: var(--space-5); margin-left: auto; }
+  nav a { color: var(--text-secondary); text-decoration: none; font-weight: 500; font-size: 15px; }
+  nav a:hover { color: var(--text-primary); }
+  .actions { display: flex; gap: var(--space-2); margin-left: auto; }
+  @media (min-width: 820px) { nav { display: flex; } .actions { margin-left: 0; } }
+</style>

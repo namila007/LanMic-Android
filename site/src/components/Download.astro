@@ -1,0 +1,66 @@
+---
+import { download as d, RELEASES_LATEST, REPO } from '../content/copy';
+const apps = [
+  { key: 'phone', ...d.phone, steps: d.phoneInstall },
+  { key: 'tv', ...d.tv, steps: d.tvInstall },
+];
+---
+
+<section id="download" aria-labelledby="dl-h">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Free</span>
+      <h2 id="dl-h">{d.title}</h2>
+      <p class="lead">{d.lead}</p>
+    </div>
+
+    <div class="cards">
+      {apps.map((a) => (
+        <article class="card reveal">
+          <div class="top"><h3>{a.name}</h3><span class="chip brand">Free</span></div>
+          <p class="muted">{a.file}. {a.note} <span class="mono ver" data-ver hidden></span></p>
+          <a class="btn btn-primary" href={RELEASES_LATEST} data-asset={a.key} rel="noopener noreferrer">Download {a.name.toLowerCase()}</a>
+          <details>
+            <summary>How to install</summary>
+            <ol>{a.steps.map((s) => <li>{s}</li>)}</ol>
+            {a.key === 'tv' && <pre class="mono"><code>{d.adb.join('\n')}</code></pre>}
+          </details>
+        </article>
+      ))}
+    </div>
+
+    <p class="muted foot">{d.play}. {d.signing} <a href={REPO + '/releases'} rel="noopener noreferrer">All releases</a></p>
+  </div>
+</section>
+
+<script>
+  // Progressive enhancement: fill in version and direct links; static links remain the fallback.
+  const PREFIX = 'https://github.com/namila007/LanMic-Android/';
+  fetch('https://api.github.com/repos/namila007/LanMic-Android/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((rel: { tag_name?: unknown; assets?: { name?: unknown; browser_download_url?: unknown }[] }) => {
+      const tag = typeof rel.tag_name === 'string' && /^v?\d+(\.\d+){1,2}$/.test(rel.tag_name) ? rel.tag_name : null;
+      if (tag) document.querySelectorAll<HTMLElement>('[data-ver]').forEach((el) => { el.textContent = tag; el.hidden = false; });
+      for (const a of rel.assets ?? []) {
+        const name = String(a.name ?? '');
+        const url = String(a.browser_download_url ?? '');
+        if (!name.endsWith('.apk') || !url.startsWith(PREFIX)) continue;
+        const link = document.querySelector<HTMLAnchorElement>(`[data-asset="${name.startsWith('lanmic-tv') ? 'tv' : 'phone'}"]`);
+        if (link) link.href = url;
+      }
+    })
+    .catch(() => {});
+</script>
+
+<style>
+  .cards { display: grid; gap: var(--space-4); }
+  .card { display: grid; gap: var(--space-4); align-content: start; justify-items: start; }
+  .top { display: flex; gap: var(--space-3); align-items: center; }
+  .ver { color: var(--brand); }
+  details { width: 100%; border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
+  summary { cursor: pointer; font-weight: 600; }
+  ol { color: var(--text-secondary); padding-left: 20px; }
+  pre { margin: 0; padding: var(--space-3); background: var(--surface-raised); border-radius: var(--radius); overflow-x: auto; font-size: 13px; }
+  .foot { margin-top: var(--space-6); font-size: 14px; }
+  @media (min-width: 820px) { .cards { grid-template-columns: 1fr 1fr; } }
+</style>

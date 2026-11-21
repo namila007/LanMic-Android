@@ -1,0 +1,73 @@
+---
+import { voicePath as v } from '../content/copy';
+---
+
+<section id="voice" aria-labelledby="voice-h">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">{v.eyebrow}</span>
+      <h2 id="voice-h">{v.title}</h2>
+      <p class="lead">{v.lead}</p>
+    </div>
+
+    <figure class="vd">
+      <div class="board">
+        {v.groups.map((g, gi) => (
+          <>
+            {gi > 0 && <div class="edge hop"></div>}
+            <div class={`group ${g.name === 'Network' ? 'net' : ''}`}>
+              <h3 class="mono">{g.name}</h3>
+              <ul>
+                {g.nodes.map(([t, d], ni) => (
+                  <>
+                    {ni > 0 && <li class="edge"></li>}
+                    <li class="node"><b>{t}</b><span>{d}</span></li>
+                  </>
+                ))}
+              </ul>
+            </div>
+          </>
+        ))}
+      </div>
+      <div class="ret">
+        <span class="edge back" aria-hidden="true"></span>
+        <span class="lbl mono">{v.returnEdge}</span>
+        <span class="pill mono">{v.pill}</span>
+      </div>
+    </figure>
+  </div>
+</section>
+
+<style>
+  .board { display: grid; gap: 0; align-items: stretch; }
+  .group { background: var(--surface-card); border-radius: var(--radius-lg); padding: var(--space-5); box-shadow: var(--shadow-card); }
+  .group h3 { font-size: 13px; color: var(--brand); letter-spacing: 0.08em; margin-bottom: var(--space-4); }
+  .group ul { list-style: none; margin: 0; padding: 0; display: grid; justify-items: center; }
+  .node { width: 100%; background: var(--surface-elevated); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: grid; gap: 2px; }
+  .node b { font: 600 15px var(--font-body); }
+  .node span { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+  .net { display: grid; align-content: center; }
+  .net .node { box-shadow: inset 0 0 0 1px var(--brand-edge); }
+
+  .edge { position: relative; width: 2px; height: 22px; border-left: 2px dashed var(--border-default); }
+  .edge::after {
+    content: ''; position: absolute; left: -5px; top: 0; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--brand); animation: flowY 1.4s linear infinite;
+  }
+  .hop { justify-self: center; height: 40px; }
+  @keyframes flowY { from { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } to { transform: translateY(16px); opacity: 0; } }
+  @keyframes flowX { from { transform: translateX(0); opacity: 0; } 20% { opacity: 1; } to { transform: translateX(46px); opacity: 0; } }
+
+  .ret { margin-top: var(--space-6); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+  .back { width: 40px; height: 0; border-left: 0; border-top: 2px dashed var(--border-default); }
+  .back::after { animation: flowBack 1.6s linear infinite; top: -5px; left: auto; right: 0; }
+  @keyframes flowBack { from { transform: translateX(0); opacity: 0; } 20% { opacity: 1; } to { transform: translateX(-36px); opacity: 0; } }
+  .lbl { font-size: 12px; color: var(--text-secondary); }
+  .pill { margin-left: auto; background: var(--brand); color: var(--on-brand); padding: 6px 14px; border-radius: var(--radius-full); font-size: 13px; }
+
+  @media (min-width: 900px) {
+    .board { grid-template-columns: 1.15fr 56px 1fr 56px 1.15fr; }
+    .hop { width: auto; height: 0; border-left: 0; border-top: 2px dashed var(--border-default); align-self: center; justify-self: stretch; }
+    .hop::after { top: -5px; left: 0; animation: flowX 1.4s linear infinite; }
+  }
+</style>

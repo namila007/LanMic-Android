@@ -1,0 +1,63 @@
+:root {
+  --surface-page: #0f1113;
+  --surface-base: #131416;
+  --surface-raised: #0b0c0d;
+  --surface-card: #1c1e21;
+  --surface-elevated: #23262a;
+  --surface-hover: #2a2d32;
+
+  --text-primary: #f7f7f8;
+  --text-secondary: #a8a8a8;
+  --text-tertiary: #898a8b; /* page and card surfaces only */
+
+  --brand: #d1fe17;
+  --brand-hover: #e1fe68;
+  --brand-pressed: #b2d814;
+  --brand-soft: #eeffa7;
+  --brand-edge: #829b19;
+  --brand-tint: #d1fe171a;
+  --on-brand: #131517;
+
+  --accent-cyan: #9ce6f3;
+  --success-soft: #4ee466;
+  --error-soft: #ff5462;
+
+  --border-subtle: #ffffff0d;
+  --border-default: #ffffff1a;
+
+  --focus-ring: var(--brand);
+
+  --radius: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 999px;
+
+  --shadow-card: 0 16px 40px 0 #00000066, inset 0 0 0 1px #ffffff0d;
+  --shadow-hairline: inset 0 0 0 1px #ffffff1a;
+  --shadow-cta: inset 0 -3px 0 0 #829b19, 0 6px 4px 0 #00000040, 0 32px 24px 0 #00000026;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+
+  /* app-screen colors, used only inside the phone and TV mocks */
+  --app-bg: #272729;
+  --app-card: #2a2a2c;
+  --app-blue: #2997ff;
+  --app-blue-deep: #0066cc;
+  --app-red: #d92d20;
+  --app-green: #30d158;
+  --app-amber: #ff9f0a;
+  --app-text: #ccc;
+}

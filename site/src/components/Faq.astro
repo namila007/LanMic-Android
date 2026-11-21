@@ -1,0 +1,28 @@
+---
+import { faq } from '../content/copy';
+---
+
+<section id="faq" aria-labelledby="faq-h">
+  <div class="wrap narrow">
+    <div class="section-head"><span class="eyebrow">FAQ</span><h2 id="faq-h">Questions</h2></div>
+    <div class="list">
+      {faq.map(([q, a]) => (
+        <details>
+          <summary>{q}</summary>
+          <p class="muted">{a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .narrow { max-width: 820px; }
+  .list { display: grid; gap: var(--space-2); }
+  details { background: var(--surface-card); border-radius: var(--radius-md); padding: 0 var(--space-5); box-shadow: var(--shadow-hairline); }
+  summary { cursor: pointer; padding: var(--space-4) 0; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: var(--space-4); }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '+'; color: var(--brand); font: 400 20px var(--font-mono); }
+  details[open] summary::after { content: '\2212'; }
+  details p { padding-bottom: var(--space-4); }
+</style>

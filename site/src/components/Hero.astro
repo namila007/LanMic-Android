@@ -1,0 +1,34 @@
+---
+import { hero, RELEASES_LATEST } from '../content/copy';
+import HeroScene from './HeroScene.astro';
+---
+
+<section class="hero" aria-labelledby="hero-h">
+  <div class="wrap grid">
+    <div class="copy">
+      <h1 id="hero-h">{hero.title}</h1>
+      <p class="lead">{hero.sub}</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-cta" href={RELEASES_LATEST} rel="noopener noreferrer">{hero.cta}</a>
+        <span class="btn btn-outline" aria-disabled="true">{hero.play}</span>
+      </div>
+      <ul class="badges">
+        {hero.badges.map((b) => <li class="chip">{b}</li>)}
+      </ul>
+    </div>
+    <HeroScene />
+  </div>
+</section>
+
+<script>
+  import '../scripts/hero.ts';
+</script>
+
+<style>
+  .hero { padding-top: clamp(40px, 7vw, 88px); }
+  .grid { display: grid; gap: var(--space-12); align-items: center; }
+  .copy { display: grid; gap: var(--space-6); }
+  .cta { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center; }
+  .badges { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1fr; } }
+</style>

@@ -1,0 +1,23 @@
+---
+import { footer as f, LICENSE } from '../content/copy';
+---
+
+<footer>
+  <div class="wrap">
+    <nav aria-label="Footer">
+      {f.links.map(([l, h]) => <a href={h} rel="noopener noreferrer">{l}</a>)}
+    </nav>
+    <p>{f.privacy}</p>
+    <p class="small">{f.made}{LICENSE && ` · ${LICENSE}`}</p>
+    <p class="small">{f.legal}</p>
+  </div>
+</footer>
+
+<style>
+  footer { border-top: 1px solid var(--border-subtle); padding: var(--space-12) 0; background: var(--surface-raised); }
+  .wrap { display: grid; gap: var(--space-4); }
+  nav { display: flex; flex-wrap: wrap; gap: var(--space-5); }
+  nav a { font-weight: 500; }
+  p { color: var(--text-secondary); }
+  .small { font-size: 13px; color: var(--text-tertiary); }
+</style>
