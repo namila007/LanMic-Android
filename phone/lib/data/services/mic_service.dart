@@ -12,6 +12,9 @@ abstract class Mic {
   bool get isOpen;
   Object? get error;
   Stream<double> get level;
+
+  /// Permille of samples the Mic boost limiter touched since the previous stats poll (about 100 ms).
+  int get limitedPermille;
 }
 
 const _formatError = "This phone's microphone format isn't supported.";
@@ -46,6 +49,8 @@ class MicService implements Mic {
   bool get isOpen => _open;
   @override
   Stream<double> get level => _level.stream;
+  @override
+  int limitedPermille = 0;
 
   @override
   Future<void> open() {
@@ -58,6 +63,7 @@ class MicService implements Mic {
     _epoch++;
     _open = false; // the level stops immediately, before the async teardown runs
     _timer?.cancel();
+    limitedPermille = 0;
     return _run(_doClose);
   }
 
@@ -99,6 +105,7 @@ class MicService implements Mic {
     try {
       final s = await capture.stats();
       if (!_open) return;
+      limitedPermille = s.limitedPermille; // before the level event: listeners read it then
       _level.add(min(1.0, s.levelRms * 4)); // same scale as the old RMS meter
       onStats?.call(s);
       if (_errors.add(s.sendErrors)) await rebind?.call();

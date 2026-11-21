@@ -29,7 +29,7 @@ void main() {
   });
 
   test('stats maps -1 to null', () async {
-    mock((_) async => [1, 2, 3, 4, 5, 30, 20, 7, -1, -1, 1, 1, -1, 192, 384, 0]);
+    mock((_) async => [1, 2, 3, 4, 5, 30, 20, 7, -1, -1, 1, 1, -1, 192, 384, 0, 35]);
     final s = await NativeReceiver().stats();
     expect((s.received, s.played, s.lost, s.discarded, s.late), (1, 2, 3, 4, 5));
     expect((s.depthMs, s.targetMs, s.jitterMs), (30, 20, 7));
@@ -37,10 +37,11 @@ void main() {
     expect(s.latencyMs, isNull);
     expect(s.mmap, isNull);
     expect((s.open, s.exclusive, s.burst, s.bufferFrames, s.xruns), (true, true, 192, 384, 0));
+    expect(s.limitedPermille, 35);
   });
 
   test('stats keeps real values', () async {
-    mock((_) async => [0, 0, 0, 0, 0, 0, 0, 0, 12, 25, 1, 0, 1, 96, 192, 3]);
+    mock((_) async => [0, 0, 0, 0, 0, 0, 0, 0, 12, 25, 1, 0, 1, 96, 192, 3, 0]);
     final s = await NativeReceiver().stats();
     expect(s.lastAudioAgeMs, 12);
     expect(s.latencyMs, 25);
@@ -117,7 +118,7 @@ void main() {
   });
 
   test('CaptureStats maps -1 to null and permille to 0..1', () async {
-    mock((_) async => [1, -1, 100, 99, 2, 3, -1, 250, 40, 50, -540, -205, -1, 0, 192, 1]);
+    mock((_) async => [1, -1, 100, 99, 2, 3, -1, 250, 40, 50, -540, -205, -1, 0, 192, 1, 42]);
     final s = await NativeCapture().stats();
     expect(calls.last.method, 'captureStats');
     expect(s.capturing, true);
@@ -129,8 +130,9 @@ void main() {
     expect((s.gateMinDb, s.gateMaxDb), (-54.0, -20.5));
     expect(s.mmap, isNull);
     expect((s.exclusive, s.burst, s.xruns), (false, 192, 1));
+    expect(s.limitedPermille, 42);
 
-    mock((_) async => [0, 12, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 1, 1, 96, 0]);
+    mock((_) async => [0, 12, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 1, 1, 96, 0, 0]);
     final t = await NativeCapture().stats();
     expect((t.capturing, t.inputLatencyMs, t.sendGapMaxMs, t.mmap, t.exclusive), (false, 12, 10, true, true));
   });
@@ -157,5 +159,14 @@ void main() {
   test('rebind invokes the channel', () async {
     await NativeReceiver().rebind();
     expect(calls.last.method, 'rebind');
+  });
+
+  test('gain setters pass the dB value', () async {
+    await NativeCapture().setGainDb(3);
+    expect(calls.last.method, 'setCaptureGain');
+    expect(calls.last.arguments, {'db': 3});
+    await NativeReceiver().setPlaybackGainDb(-6);
+    expect(calls.last.method, 'setPlaybackGain');
+    expect(calls.last.arguments, {'db': -6});
   });
 }

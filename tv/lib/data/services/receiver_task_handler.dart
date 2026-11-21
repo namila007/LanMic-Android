@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:lanmic_protocol/lanmic_protocol.dart';
+import 'package:pcm_out/pcm_out.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_band/wifi_band.dart';
 
 import '../../domain/receiver_engine.dart';
 import '../../domain/receiver_status.dart';
 import 'engine_factory.dart';
+import 'voice_volume_store.dart';
 
 const kReceiverNotificationTitle = 'LAN Mic receiver is running';
 const kReceiverNotificationText = 'LAN Mic receiver is running';
@@ -59,6 +61,12 @@ class ReceiverTaskHandler extends TaskHandler {
       },
     );
     unawaited(reader.setLowLatency(true));
+    // Voice volume holds after a reboot without the UI: read the saved value here and apply it.
+    try {
+      await NativeReceiver().setPlaybackGainDb(await SharedPrefsVoiceVolumeStore(prefs).load());
+    } on Object catch (e) {
+      debugPrint('[lanmic] voice volume failed: $e');
+    }
     _sockLog = engine.socketEvents.listen((e) => debugPrint('[lanmic] socket $e'));
     await engine.start();
     ReceiverStatus? sent;

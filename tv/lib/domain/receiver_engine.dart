@@ -41,6 +41,7 @@ class ReceiverEngine implements ReceiverStatusSource {
   StreamSubscription<Datagram>? _sub;
   Timer? _timer, _pollTimer;
   bool _running = false, _polling = false;
+  bool _gainLimiting = false; // on above 20 permille, off below 10: no flicker, no needless status changes
   int _hk = 0, _statsSent = 0;
   final loss = LossMeter();
   final _delays = <int>[];
@@ -68,6 +69,7 @@ class ReceiverEngine implements ReceiverStatusSource {
     tvDelayMs: _tvDelayMs,
     lostPermille: _lostPermille,
     band: wifiBand(),
+    gainLimiting: _gainLimiting,
   );
 
   Future<void> start() async {
@@ -108,11 +110,13 @@ class ReceiverEngine implements ReceiverStatusSource {
       final s = await audio.stats();
       if (!_running) return;
       _stats = s;
+      _gainLimiting = s.limitedPermille > 20 || (_gainLimiting && s.limitedPermille >= 10);
       if (_receiving) _jitterMs = s.jitterMs;
       _refresh();
     } catch (e) {
       // Frozen numbers must not keep the state at "receiving".
       _stats = null;
+      _gainLimiting = false;
       final t = now(), last = _lastStatsLog;
       if (last == null || t.difference(last) >= const Duration(seconds: 10)) {
         _lastStatsLog = t;

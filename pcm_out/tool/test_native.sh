@@ -27,6 +27,10 @@ clang++ -std=c++17 -O1 -g -Wall -Werror -fsanitize=address,undefined -fno-saniti
   -I"$cpp" "$here/test_native/capture_test.cpp" "$cpp/frame_queue.cpp" "$cpp/noise_gate.cpp" -o "$out/capture_test"
 "$out/capture_test"
 
+clang++ -std=c++17 -O1 -g -Wall -Werror -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I"$cpp" "$here/test_native/gain_test.cpp" "$cpp/gain.cpp" -o "$out/gain_test"
+"$out/gain_test"
+
 clang++ -std=c++17 -O1 -g -Wall -Werror -fsanitize=thread \
   -I"$cpp" "$here/test_native/capture_test.cpp" "$cpp/frame_queue.cpp" "$cpp/noise_gate.cpp" -o "$out/capture_stress"
 "$out/capture_stress" stress

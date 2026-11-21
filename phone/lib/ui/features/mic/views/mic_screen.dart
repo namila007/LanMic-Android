@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:lanmic/data/services/permission_service.dart';
 import 'package:lanmic/domain/phone_state.dart';
 import 'package:lanmic/ui/features/mic/view_models/mic_view_model.dart';
+import 'package:lanmic/ui/features/mic/views/mic_boost_row.dart';
 import 'package:lanmic/ui/features/mic/views/stats_card.dart';
 
 const _live = Color(0xFFD92D20);
@@ -210,7 +211,7 @@ class _MicScreenState extends State<MicScreen>
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -219,10 +220,10 @@ class _MicScreenState extends State<MicScreen>
                             child: _chip(t),
                           ),
                           if (!_connected) ...[
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             _card(t),
                           ] else if (_vm.link case final link?) ...[
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             StatsCard(
                               link: link,
                               phoneBand: _vm.phoneBand,
@@ -235,9 +236,20 @@ class _MicScreenState extends State<MicScreen>
                               accent: t.accent,
                             ),
                           ],
-                          const SizedBox(height: 20),
-                          _segments(t),
                           const SizedBox(height: 16),
+                          _segments(t),
+                          if (_connected) ...[
+                            const SizedBox(height: 12),
+                            MicBoostRow(
+                              db: _vm.micBoostDb,
+                              limiting: _vm.micLimiting,
+                              onChanged: _vm.setMicBoost,
+                              fg: t.fg,
+                              muted: t.muted,
+                              accent: t.accent,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
                           Center(child: _talk(t)),
                           const SizedBox(height: 12),
                           _level(t),
@@ -468,8 +480,8 @@ class _MicScreenState extends State<MicScreen>
         ? _disabled
         : t.accent;
     return SizedBox(
-      width: 208,
-      height: 208,
+      width: 176,
+      height: 176,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -484,8 +496,8 @@ class _MicScreenState extends State<MicScreen>
                     child: Transform.scale(
                       scale: 1 + 0.22 * p,
                       child: Container(
-                        width: 184,
-                        height: 184,
+                        width: 160,
+                        height: 160,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(color: _ring, width: 2),
@@ -519,9 +531,9 @@ class _MicScreenState extends State<MicScreen>
               child: GestureDetector(
                 onTap: !dis && _mode == TalkMode.keep ? _vm.tapTalk : null,
                 child: Container(
-                  width: 184,
-                  height: 184,
-                  padding: const EdgeInsets.all(8),
+                  width: 160,
+                  height: 160,
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: _isLive ? _live : Colors.transparent,
@@ -529,30 +541,38 @@ class _MicScreenState extends State<MicScreen>
                   ),
                   child: DefaultTextStyle.merge(
                     style: TextStyle(color: fg),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.mic, size: 40, color: accent),
-                        const SizedBox(height: 8),
-                        Text(
-                          _talkLabel(_s, _mode),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: dis ? 17 : 21,
-                            height: 1.19,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.231,
-                          ),
-                        ),
-                        if (_isLive)
-                          Text(
-                            _elapsed,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontFeatures: [FontFeature.tabularFigures()],
+                    // Large system text scales down to fit the circle instead of overflowing it.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: 146, // the circle's inside: 160 - 2 x 4 padding - 2 x 3 border
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.mic, size: 32, color: accent),
+                            const SizedBox(height: 4),
+                            Text(
+                              _talkLabel(_s, _mode),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: dis ? 17 : 21,
+                                height: 1.19,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.231,
+                              ),
                             ),
-                          ),
-                      ],
+                            if (_isLive)
+                              Text(
+                                _elapsed,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontFeatures: [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

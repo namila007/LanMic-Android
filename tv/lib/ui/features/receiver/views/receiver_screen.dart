@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -36,17 +38,26 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
     super.dispose();
   }
 
-  // D-pad down/right moves to Exit, up/left back to the screen.
+  // D-pad: Up/Down change Voice volume (held keys repeat), Select resets it, Left/Right move focus to and
+  // from Exit. A focused Exit handles its own Select.
   KeyEventResult _onKey(FocusNode _, KeyEvent e) {
-    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (e is KeyUpEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.arrowDown ||
-        k == LogicalKeyboardKey.arrowRight) {
+    if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
+      unawaited(widget.vm.stepVoiceVolume(k == LogicalKeyboardKey.arrowUp ? 1 : -1));
+      return KeyEventResult.handled;
+    }
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    if (k == LogicalKeyboardKey.arrowRight) {
       _exitFocus.requestFocus();
       return KeyEventResult.handled;
     }
-    if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowLeft) {
+    if (k == LogicalKeyboardKey.arrowLeft) {
       _screenFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if ((k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter) && !_exitFocus.hasFocus) {
+      unawaited(widget.vm.resetVoiceVolume());
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -132,10 +143,10 @@ class _Layout extends StatelessWidget {
           'LAN Mic Receiver',
           style: GoogleFonts.inter(fontSize: 56, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         Container(
           width: 880,
-          padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 64),
+          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 64),
           decoration: BoxDecoration(
             color: Colors.black,
             borderRadius: BorderRadius.circular(18),
@@ -148,10 +159,11 @@ class _Layout extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         _StatusRow(state: vm.state),
         _StatsLine(items: statsLine(vm.status)),
-        const SizedBox(height: 28),
+        _VoiceVolume(vm: vm),
+        const SizedBox(height: 24),
         const Text(
           'Leave this app. It keeps running in the background.',
           style: TextStyle(fontSize: 24, color: _muted),
@@ -159,6 +171,102 @@ class _Layout extends StatelessWidget {
       ],
     );
   }
+}
+
+const _orange = Color(0xFFFF9F0A);
+
+/// Voice volume pill + 25-step bar (-12..+12). Larger and highlighted for 2 s after a change.
+class _VoiceVolume extends StatelessWidget {
+  const _VoiceVolume({required this.vm});
+
+  final ReceiverViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final db = vm.voiceVolumeDb, changed = vm.voiceJustChanged, limited = vm.voiceLimited;
+    final fs = changed ? 40.0 : 32.0;
+    final fill = limited ? _orange : _blue;
+    final off = Colors.white.withValues(alpha: 0.18);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Semantics(
+        label: voiceSemantics(db, limited: limited),
+        excludeSemantics: true,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 96),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                decoration: BoxDecoration(
+                  color: changed ? const Color(0x332997FF) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(32),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Voice volume',
+                      style: TextStyle(fontSize: fs, color: changed ? Colors.white : _muted, fontFeatures: _tabular),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      dbText(db),
+                      style: TextStyle(
+                        fontSize: fs,
+                        fontWeight: FontWeight.w600,
+                        color: changed ? _blue : Colors.white,
+                        fontFeatures: _tabular,
+                      ),
+                    ),
+                    if (limited) ...[
+                      const SizedBox(width: 16),
+                      Container(
+                        width: 14,
+                        height: 14,
+                        decoration: const BoxDecoration(color: _orange, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text('Voice limited', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 24,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < 25; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      Container(
+                        key: Key('voice-step-${i - 12}'),
+                        width: 14,
+                        height: i == 12 ? 24 : 14,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: _stepOn(i - 12, db)
+                              ? (i == 12 ? Colors.white : fill)
+                              : off,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // The centre step is always lit (white); steps between it and the value are filled.
+  static bool _stepOn(int d, int db) => d == 0 || (db > 0 ? d > 0 && d <= db : d < 0 && d >= db);
 }
 
 class _StatsLine extends StatelessWidget {

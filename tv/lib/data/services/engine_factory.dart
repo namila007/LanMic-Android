@@ -54,6 +54,7 @@ class NativeAudioEngine implements AudioEngine {
       burst: s.burst,
       bufferFrames: s.bufferFrames,
       xruns: s.xruns,
+      limitedPermille: s.limitedPermille,
     );
   }
 }

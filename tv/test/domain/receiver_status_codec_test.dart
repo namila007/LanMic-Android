@@ -22,6 +22,7 @@ void main() {
       tvDelayMs: 90,
       lostPermille: 3,
       band: WifiBand.ghz5,
+      gainLimiting: true,
     );
     expect(ReceiverStatus.fromMap(st.toMap()), st);
     expect(ReceiverStatus.fromMap({'state': 'receiving'}).band, WifiBand.unknown);

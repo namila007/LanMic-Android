@@ -30,7 +30,9 @@ class MicViewModel extends ChangeNotifier {
     required this.now,
     Future<WifiBand> Function()? readBand,
     void Function(bool)? setLowLatency,
-  }) : _readBand = readBand ?? (() async => WifiBand.unknown),
+    Future<void> Function(int db)? setMicGain,
+  }) : _setMicGain = setMicGain ?? ((_) async {}),
+       _readBand = readBand ?? (() async => WifiBand.unknown),
        _setLowLatency = setLowLatency ?? ((_) {}) {
     _gate = TalkGate(
       onOpen: _onOpen,
@@ -56,6 +58,9 @@ class MicViewModel extends ChangeNotifier {
   final DateTime Function() now;
   final Future<WifiBand> Function() _readBand;
   final void Function(bool) _setLowLatency;
+  final Future<void> Function(int db) _setMicGain;
+  int micBoostDb = 0;
+  bool _wasLimiting = false;
   late final TalkGate _gate;
   late final StreamSubscription<PhoneState> _sub;
   late final StreamSubscription<LinkSnapshot> _linkSub;
@@ -106,6 +111,8 @@ class MicViewModel extends ChangeNotifier {
     final p = await prefs.load();
     savedIp = p.ip;
     _gate.setMode(p.mode);
+    micBoostDb = p.micBoostDb.clamp(-12, 12);
+    await _applyGain();
     notifyListeners();
   }
 
@@ -133,11 +140,36 @@ class MicViewModel extends ChangeNotifier {
     _pausedByCall = false;
   }
 
-  void setMode(TalkMode m) {
+  Future<void> setMode(TalkMode m) async {
     _gate.setMode(m);
-    unawaited(prefs.save(mode: m));
     notifyListeners();
+    await prefs.save(mode: m);
   }
+
+  /// Mic boost, -12..+12 dB: saved, and applied natively at once (also while talking).
+  Future<void> setMicBoost(int db) async {
+    micBoostDb = db.clamp(-12, 12);
+    notifyListeners();
+    await _applyGain(); // native first: what the screen shows is what the audio does
+    try {
+      await prefs.save(micBoostDb: micBoostDb);
+    } on Object catch (e) {
+      debugPrint('mic boost not saved: $e');
+    }
+  }
+
+  Future<void> _applyGain() async {
+    try {
+      await _setMicGain(micBoostDb);
+    } on Object catch (e) {
+      debugPrint('mic gain failed: $e');
+    }
+  }
+
+  /// Only while live: the limiter touched the samples in the last stats poll (about 100 ms).
+  /// On above 20 permille; once on (seen by the level listener) it stays on until below 10, so it does not flicker.
+  bool get micLimiting =>
+      state == PhoneState.live && (mic.limitedPermille > 20 || (_wasLimiting && mic.limitedPermille >= 10));
 
   void pressTalk() {
     if (!_gate.enabled) return;
@@ -219,6 +251,7 @@ class MicViewModel extends ChangeNotifier {
       // Focus is only for call detection; the silence watchdog still covers it.
     }
     if (token != _openToken) return unawaited(focus.deactivate());
+    await _applyGain(); // every capture start begins with the saved boost
     await mic.open();
     if (token != _openToken || !_gate.isOpen) return;
     if (!mic.isOpen) return _fail(token, mic.error is String ? mic.error! as String : 'Could not start the microphone.');
@@ -248,10 +281,15 @@ class MicViewModel extends ChangeNotifier {
     arm();
     _levelSub = mic.level.listen((l) {
       if (l > _silentLevel) arm();
+      if (micLimiting != _wasLimiting) {
+        _wasLimiting = micLimiting;
+        notifyListeners();
+      }
     });
   }
 
   void _stopWatch() {
+    _wasLimiting = false;
     _stall?.cancel();
     unawaited(_levelSub?.cancel());
     _levelSub = null;

@@ -154,6 +154,7 @@ oboe::DataCallbackResult AudioOut::onAudioReady(oboe::AudioStream*, void* audioD
     for (int32_t done = 0; done < numFrames;) {
         const int32_t n = std::min(numFrames - done, cap);
         ring_.read(scratch_.data(), n, now);
+        applyGain(scratch_.data(), n, gain_);
         for (int32_t i = 0; i < n; ++i) {
             const int16_t v = scratch_[size_t(i)];
             const size_t o = size_t(done + i) * size_t(ch);
@@ -187,6 +188,7 @@ void AudioOut::stats(int64_t* out) {
     out[kTargetMs] = int64_t(c.targetFrames) * 10;
     out[kJitterMs] = c.jitterMs;
     out[kLastAudioAgeMs] = c.lastPushNs == kNever ? -1 : (now - c.lastPushNs) / 1'000'000;
+    out[kLimitedPermille] = gain_.takeLimitedPermille();
     // The manager holds streamMu_ across a (possibly slow) close(): serve cached values instead of waiting.
     std::unique_lock<std::mutex> lk(streamMu_, std::try_to_lock);
     if (!lk.owns_lock()) {

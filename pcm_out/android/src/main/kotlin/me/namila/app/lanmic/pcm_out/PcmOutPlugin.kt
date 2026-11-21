@@ -97,6 +97,14 @@ class PcmOutPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChanne
                 )
                 result.success(null)
             }
+            "setCaptureGain" -> {
+                NativeAudio.nativeSetCaptureGainDb(call.argument<Int>("db") ?: 0)
+                result.success(null)
+            }
+            "setPlaybackGain" -> {
+                NativeAudio.nativeSetPlaybackGainDb(call.argument<Int>("db") ?: 0)
+                result.success(null)
+            }
             "captureStats" -> {
                 val out = LongArray(NativeAudio.CAPTURE_STATS_SIZE)
                 NativeAudio.nativeCaptureStats(out)

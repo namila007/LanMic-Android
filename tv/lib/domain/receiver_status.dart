@@ -20,11 +20,15 @@ class ReceiverStatus {
     this.tvDelayMs,
     this.lostPermille,
     this.band = WifiBand.unknown,
+    this.gainLimiting = false,
   });
 
   final TvState state;
   final int framesRx, framesDropped, underruns;
   final int? rttMs, delayMs, tvDelayMs, lostPermille;
+
+  /// The Voice-volume limiter is working (with hysteresis: on above 20 permille, off below 10). UI only.
+  final bool gainLimiting;
   final WifiBand band;
 
   Map<String, Object?> toMap() => {
@@ -37,6 +41,7 @@ class ReceiverStatus {
     'tvDelayMs': tvDelayMs,
     'lostPermille': lostPermille,
     'band': band.index,
+    'gainLimiting': gainLimiting,
   };
 
   factory ReceiverStatus.fromMap(Map<Object?, Object?> m) => ReceiverStatus(
@@ -52,6 +57,7 @@ class ReceiverStatus {
       final int i when i >= 0 && i < WifiBand.values.length => WifiBand.values[i],
       _ => WifiBand.unknown,
     },
+    gainLimiting: m['gainLimiting'] as bool? ?? false,
   );
 
   @override
@@ -65,7 +71,8 @@ class ReceiverStatus {
       other.delayMs == delayMs &&
       other.tvDelayMs == tvDelayMs &&
       other.lostPermille == lostPermille &&
-      other.band == band;
+      other.band == band &&
+      other.gainLimiting == gainLimiting;
 
   @override
   int get hashCode => Object.hash(
@@ -78,6 +85,7 @@ class ReceiverStatus {
     tvDelayMs,
     lostPermille,
     band,
+    gainLimiting,
   );
 
   @override

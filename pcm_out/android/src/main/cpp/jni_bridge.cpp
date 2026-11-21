@@ -33,7 +33,7 @@ JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeFlus
     AudioOut::instance().flush();
 }
 
-// out: LongArray(16), layout = lanmic::StatIndex in audio_out.h.
+// out: LongArray(17), layout = lanmic::StatIndex in audio_out.h.
 JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeStats(
     JNIEnv* env, jobject, jlongArray out) {
     if (out == nullptr || env->GetArrayLength(out) < lanmic::kStatsSize) return;
@@ -69,13 +69,22 @@ JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeSetS
     AudioIn::instance().setSendFd(fd);
 }
 
-// out: LongArray(16), layout = lanmic::CaptureStatIndex in audio_in.h.
+// out: LongArray(17), layout = lanmic::CaptureStatIndex in audio_in.h.
 JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeCaptureStats(
     JNIEnv* env, jobject, jlongArray out) {
     if (out == nullptr || env->GetArrayLength(out) < lanmic::kCapStatsSize) return;
     int64_t v[lanmic::kCapStatsSize];
     AudioIn::instance().stats(v);
     env->SetLongArrayRegion(out, 0, lanmic::kCapStatsSize, reinterpret_cast<const jlong*>(v));
+}
+
+// Voice volume, -12..+12 dB; takes effect within 10 ms (ramped).
+JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeSetCaptureGainDb(JNIEnv*, jobject, jint db) {
+    AudioIn::instance().setGainDb(db);
+}
+
+JNIEXPORT void JNICALL Java_me_namila_app_lanmic_pcm_1out_NativeAudio_nativeSetPlaybackGainDb(JNIEnv*, jobject, jint db) {
+    AudioOut::instance().setGainDb(db);
 }
 
 }  // extern "C"

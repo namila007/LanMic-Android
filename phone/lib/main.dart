@@ -44,6 +44,7 @@ Future<void> main() async {
     now: DateTime.now,
     readBand: const WifiBandReader().read,
     setLowLatency: const WifiBandReader().setLowLatency,
+    setMicGain: capture.setGainDb,
   );
   await vm.init();
   runApp(LanMicApp(viewModel: vm));

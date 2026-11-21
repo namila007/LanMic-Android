@@ -19,6 +19,7 @@ class NativeStats {
     required this.burst,
     required this.bufferFrames,
     required this.xruns,
+    required this.limitedPermille,
   });
 
   /// Index order of the native stats array (see NativeAudio.kt).
@@ -41,6 +42,7 @@ class NativeStats {
       burst: v[13],
       bufferFrames: v[14],
       xruns: v[15],
+      limitedPermille: v[16],
     );
   }
 
@@ -50,6 +52,9 @@ class NativeStats {
   final bool open, exclusive;
   final bool? mmap;
   final int burst, bufferFrames, xruns;
+
+  /// Permille of samples the voice-volume limiter touched since the previous stats call.
+  final int limitedPermille;
 }
 
 /// Kotlin-owned UDP socket plus the native low-latency audio path. Only non-AUDIO packets reach Dart.
@@ -83,6 +88,9 @@ class NativeReceiver {
   /// Closes and rebinds the socket (a new port when started with 0); a `bound` event follows.
   Future<void> rebind() => _method.invokeMethod<void>('rebind');
 
+  /// Voice volume in dB (-12..+12); native clamps and ramps it.
+  Future<void> setPlaybackGainDb(int db) => _method.invokeMethod<void>('setPlaybackGain', {'db': db});
+
   /// The phone whose audio is played; all nulls accept nobody.
   Future<void> accept(String? host, int? port, int? pin) =>
       _method.invokeMethod<void>('accept', {'host': host, 'port': port, 'pin': pin});
@@ -114,6 +122,7 @@ class CaptureStats {
     required this.exclusive,
     required this.burst,
     required this.xruns,
+    required this.limitedPermille,
   });
 
   /// Index order of the native capture stats array (see NativeAudio.kt).
@@ -136,6 +145,7 @@ class CaptureStats {
       exclusive: v[13] == 1,
       burst: v[14],
       xruns: v[15],
+      limitedPermille: v[16],
     );
   }
 
@@ -148,6 +158,7 @@ class CaptureStats {
   final bool? mmap;
   final bool exclusive;
   final int burst, xruns;
+  final int limitedPermille; // permille of samples the Mic boost limiter touched since the previous stats call
 }
 
 /// Phone microphone capture: native Oboe input, gate and UDP sender. Audio leaves from the
@@ -164,6 +175,9 @@ class NativeCapture {
   /// A null [host] clears the target (native stops sending).
   Future<void> setTarget(String? host, int port, int pin) =>
       _method.invokeMethod<void>('setTarget', {'host': host, 'port': port, 'pin': pin});
+
+  /// Mic boost in dB (-12..+12); native clamps and ramps it.
+  Future<void> setGainDb(int db) => _method.invokeMethod<void>('setCaptureGain', {'db': db});
 
   Future<CaptureStats> stats() async =>
       CaptureStats.fromList((await _method.invokeListMethod<int>('captureStats'))!);

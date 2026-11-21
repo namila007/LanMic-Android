@@ -132,4 +132,17 @@ void main() {
     expect(r.engine.current.rttMs, isNull);
     expect(r.engine.current.delayMs, isNull);
   });
+
+  rig('limiter flag has hysteresis: on above 20, off below 10 permille', (r) {
+    r.hello();
+    bool limiting(int permille) {
+      r.setStats(AudioStats(lastAudioAgeMs: 10, limitedPermille: permille));
+      return r.engine.current.gainLimiting;
+    }
+    expect(limiting(15), isFalse);
+    expect(limiting(25), isTrue);
+    expect(limiting(15), isTrue); // between the thresholds: stays on
+    expect(limiting(5), isFalse);
+    expect(limiting(15), isFalse); // and stays off
+  });
 }

@@ -54,3 +54,14 @@ String statsSemantics(List<StatItem> items) => items
       return '${i.$1} $v${q == null ? '' : ', ${qualityLabel(q)}'}.';
     })
     .join(' ');
+
+/// Voice gain with a real minus sign: 0 -> '0 dB', 3 -> '+3 dB', -6 -> '−6 dB'.
+String dbText(int db) => db == 0 ? '0 dB' : '${db > 0 ? '+' : '−'}${db.abs()} dB';
+
+/// Screen-reader text: 'Voice volume plus 3 decibels. Voice limited.'
+String voiceSemantics(int db, {bool limited = false}) =>
+    'Voice volume ${db > 0
+        ? 'plus '
+        : db < 0
+        ? 'minus '
+        : ''}${db.abs()} decibels.${limited ? ' Voice limited.' : ''}';

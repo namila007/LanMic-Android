@@ -27,6 +27,7 @@ class AudioStats {
     this.burst = 0,
     this.bufferFrames = 0,
     this.xruns = 0,
+    this.limitedPermille = 0,
   });
 
   final int received, played, lost, discarded, late;
@@ -35,6 +36,7 @@ class AudioStats {
   final bool open, exclusive;
   final bool? mmap;
   final int burst, bufferFrames, xruns;
+  final int limitedPermille; // Voice volume limiter, permille of samples since the previous poll (250 ms)
 }
 
 /// The socket and the audio output. AUDIO never reaches Dart: the engine only sees control packets.

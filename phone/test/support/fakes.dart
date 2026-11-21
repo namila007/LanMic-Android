@@ -72,6 +72,8 @@ class FakeMic implements Mic {
   final levels = StreamController<double>.broadcast(sync: true);
   @override
   Stream<double> get level => levels.stream;
+  @override
+  int limitedPermille = 0;
 
   @override
   Future<void> open() async {

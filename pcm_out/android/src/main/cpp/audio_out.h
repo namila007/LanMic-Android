@@ -9,18 +9,21 @@
 
 #include <oboe/Oboe.h>
 
+#include "gain.h"
 #include "jitter_ring.h"
 
 namespace lanmic {
 
-// Index order of the stats array; must match NativeAudio.kt (STATS_SIZE = 16).
+// Index order of the stats array; must match NativeAudio.kt (STATS_SIZE = 17).
 enum StatIndex {
     kReceived, kPlayed, kLost, kDiscarded, kLate, kDepthMs, kTargetMs, kJitterMs,
     kLastAudioAgeMs,  // -1 if never
     kLatencyMs,       // -1 unknown
     kOpen, kExclusive,
     kMmap,            // 0/1, -1 unknown
-    kBurst, kBufferFrames, kXruns, kStatsSize
+    kBurst, kBufferFrames, kXruns,
+    kLimitedPermille,  // share of samples the gain limiter touched since the last read
+    kStatsSize
 };
 
 int64_t monotonicNs();
@@ -33,6 +36,7 @@ public:
     void stop();   // idempotent
     void push(const int16_t* pcm480, uint32_t seq, int64_t nowNs);
     void flush() { ring_.flush(); }
+    void setGainDb(int db) { gain_.setDb(db); }  // Voice volume
     void stats(int64_t* out);  // kStatsSize values; called from a JNI thread, never the audio callback
 
     // Real-time: reads atomics and the ring only.
@@ -47,6 +51,7 @@ private:
     void wake();
 
     JitterRing ring_;
+    GainState gain_;
     std::shared_ptr<AudioOut> self_;  // oboe wants shared_ptr callbacks
 
     std::mutex lifeMu_;  // serialises start()/stop() (including the join) so a quick stop -> start cannot overlap

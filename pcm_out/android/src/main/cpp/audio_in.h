@@ -13,11 +13,12 @@
 #include <oboe/Oboe.h>
 
 #include "frame_queue.h"
+#include "gain.h"
 #include "noise_gate.h"
 
 namespace lanmic {
 
-// Index order of the capture stats array; must match NativeAudio.kt (CAPTURE_STATS_SIZE = 16).
+// Index order of the capture stats array; must match NativeAudio.kt (CAPTURE_STATS_SIZE = 17).
 enum CaptureStatIndex {
     kCapCapturing, kCapInputLatencyMs,  // -1 unknown
     kCapFramesCaptured, kCapFramesSent, kCapFramesDropped, kCapSendErrors,
@@ -25,7 +26,9 @@ enum CaptureStatIndex {
     kCapLevelRmsPermille,
     kCapGateOpenFrames, kCapGateFrames, kCapGateMinDbX10, kCapGateMaxDbX10,  // gate fields reset on read
     kCapMmap,                           // 0/1, -1 unknown
-    kCapExclusive, kCapBurst, kCapXruns, kCapStatsSize
+    kCapExclusive, kCapBurst, kCapXruns,
+    kCapLimitedPermille,                // share of samples the gain limiter touched since the last read
+    kCapStatsSize
 };
 
 constexpr int kCaptureOk = 0, kCaptureOpenFailed = -1, kCaptureFormatUnsupported = -2;
@@ -37,6 +40,7 @@ public:
     int start();  // idempotent; 0 ok, else a negative code
     void stop();  // synchronous: input closed, every queued frame sent, sender joined
     void setTarget(const char* ipv4, int port, int pin);  // null/invalid clears
+    void setGainDb(int db) { gain_.setDb(db); }  // Mic boost
     void setSendFd(int fd);  // takes ownership of the dup; closes the one it replaces
     void stats(int64_t* out);  // JNI thread, never the callback
 
@@ -68,6 +72,7 @@ private:
 
     FrameQueue queue_;
     FrameAssembler assembler_;  // callback thread only
+    GainState gain_;            // sender thread applies, any thread sets
     NoiseGate gate_;            // sender thread only (stats read under gateMu_)
     std::mutex gateMu_;
 

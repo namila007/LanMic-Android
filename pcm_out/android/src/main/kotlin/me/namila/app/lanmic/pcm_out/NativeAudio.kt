@@ -11,9 +11,9 @@ object NativeAudio {
     /**
      * Index order of [nativeStats] (matches StatIndex in audio_out.h): received, played, lost, discarded,
      * late, depthMs, targetMs, jitterMs, lastAudioAgeMs (-1 never), latencyMs (-1 unknown), open (0/1),
-     * exclusive (0/1), mmap (0/1, -1 unknown), burst, bufferFrames, xruns.
+     * exclusive (0/1), mmap (0/1, -1 unknown), burst, bufferFrames, xruns, limitedPermille.
      */
-    const val STATS_SIZE = 16
+    const val STATS_SIZE = 17
 
     external fun nativeVersion(): Int
     external fun nativeStart()
@@ -28,9 +28,10 @@ object NativeAudio {
      * Index order of [nativeCaptureStats] (matches CaptureStatIndex in audio_in.h): capturing (0/1),
      * inputLatencyMs (-1 unknown), framesCaptured, framesSent, framesDropped, sendErrors, sendGapMaxMs
      * (last 1 s, -1 none), levelRmsPermille, gateOpenFrames, gateFrames, gateMinDbX10, gateMaxDbX10
-     * (the gate fields reset on read), mmap (0/1, -1 unknown), exclusive (0/1), burst, xruns.
+     * (the gate fields reset on read), mmap (0/1, -1 unknown), exclusive (0/1), burst, xruns,
+     * limitedPermille (resets on read).
      */
-    const val CAPTURE_STATS_SIZE = 16
+    const val CAPTURE_STATS_SIZE = 17
 
     /** 0 ok, -1 open failed, -2 format unsupported. Phone only. */
     external fun nativeCaptureStart(): Int
@@ -44,4 +45,8 @@ object NativeAudio {
     /** Hands over a dup of the UDP socket fd; native owns it and closes it on the next swap. */
     external fun nativeSetSendFd(fd: Int)
     external fun nativeCaptureStats(out: LongArray)
+
+    /** Mic boost / Voice volume, -12..+12 dB; ramped over 10 ms natively. */
+    external fun nativeSetCaptureGainDb(db: Int)
+    external fun nativeSetPlaybackGainDb(db: Int)
 }

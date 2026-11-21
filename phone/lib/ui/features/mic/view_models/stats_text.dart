@@ -31,3 +31,13 @@ String statsSemantics(LinkSnapshot l) {
       'Lost audio ${(l.lostPermille! / 10).toStringAsFixed(1)} percent.',
   ].join(' ');
 }
+
+/// Voice gain with a real minus sign: 0 -> '0 dB', 3 -> '+3 dB', -6 -> '−6 dB'.
+String dbText(int db) => db == 0 ? '0 dB' : '${db > 0 ? '+' : '−'}${db.abs()} dB';
+
+/// For screen readers: 3 -> 'plus 3 decibels'.
+String dbSpoken(int db) => '${db > 0
+    ? 'plus '
+    : db < 0
+    ? 'minus '
+    : ''}${db.abs()} decibels';

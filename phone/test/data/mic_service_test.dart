@@ -6,8 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lanmic/data/services/mic_service.dart';
 import 'package:pcm_out/pcm_out.dart';
 
-CaptureStats cs({double level = 0, int sendErrors = 0}) => CaptureStats.fromList(
-  [1, 12, 0, 0, 0, sendErrors, 10, (level * 1000).round(), 0, 0, 0, 0, 1, 1, 96, 0],
+CaptureStats cs({double level = 0, int sendErrors = 0, int limited = 0}) => CaptureStats.fromList(
+  [1, 12, 0, 0, 0, sendErrors, 10, (level * 1000).round(), 0, 0, 0, 0, 1, 1, 96, 0, limited],
 );
 
 class _FakeCapture extends NativeCapture {
@@ -84,6 +84,19 @@ void main() {
       expect(got.last, 1.0);
       unawaited(m.close());
       a.flushMicrotasks();
+    });
+  });
+
+  test('limitedPermille follows the stats poll and clears on close', () {
+    fakeAsync((a) {
+      final c = _FakeCapture()..next = cs(limited: 40);
+      final m = MicService(capture: c);
+      unawaited(m.open());
+      a.elapse(const Duration(milliseconds: 250));
+      expect(m.limitedPermille, 40);
+      unawaited(m.close());
+      a.flushMicrotasks();
+      expect(m.limitedPermille, 0);
     });
   });
 

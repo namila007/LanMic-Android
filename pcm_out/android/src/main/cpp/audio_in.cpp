@@ -215,6 +215,7 @@ void AudioIn::senderMain() {
                 std::lock_guard<std::mutex> g(gateMu_);
                 gate_.process(frame);
             }
+            applyGain(frame, kFrameSamples, gain_);
             uint8_t pkt[kAudioPacketBytes];
             bool sent = false;
             {
@@ -275,6 +276,7 @@ void AudioIn::stats(int64_t* out) {
     out[kCapInputLatencyMs] = cachedLatency_.load();
     out[kCapMmap] = mmap_.load();
     out[kCapXruns] = cachedXruns_.load();
+    out[kCapLimitedPermille] = gain_.takeLimitedPermille();
 }
 
 }  // namespace lanmic
