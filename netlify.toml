@@ -3,7 +3,8 @@
   command = "npm run build"
   publish = "dist"
   # Exit 0 = skip the build. Runs in the base dir (site/), so only site/ changes trigger a deploy.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../netlify.toml"
+  # No previous deploy (empty CACHED_COMMIT_REF, e.g. the first deploy) always builds.
+  ignore = "[ -n \"$CACHED_COMMIT_REF\" ] && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../netlify.toml"
 
 [[headers]]
   for = "/*"
