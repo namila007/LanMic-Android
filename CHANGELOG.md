@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-11-21
 
 About **3× less delay**: native audio on both ends cut the mouth‑to‑TV‑output delay from about 250–300 ms to about 70–80 ms on a Pixel 7 → Chromecast with Google TV, with under 0.5% lost audio.
 
