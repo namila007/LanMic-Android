@@ -1,7 +1,7 @@
 name: lanmic
 description: "LAN Mic: use your phone as the TV microphone."
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.1.1+3
 
 environment:
   sdk: ^3.13.3
@@ -30,3 +30,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/google_fonts/ # Inter, bundled so google_fonts never touches the network

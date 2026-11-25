@@ -32,9 +32,9 @@ void main() {
     expect(s, contains('android:exported="false"'));
   });
 
-  test('gradle pins minSdk 26 and targetSdk 34', () {
+  test('gradle pins minSdk 26 and targetSdk 36 (Play requirement)', () {
     expect(gradle, matches(RegExp(r'minSdk\s*=\s*26\b')));
-    expect(gradle, matches(RegExp(r'targetSdk\s*=\s*34\b')));
+    expect(gradle, matches(RegExp(r'targetSdk\s*=\s*36\b')));
     expect(gradle, isNot(contains('flutter.minSdkVersion')));
     expect(gradle, isNot(contains('flutter.targetSdkVersion')));
   });

@@ -180,6 +180,7 @@ export const footer = {
     ['Releases', RELEASES],
     ['Changelog', `${REPO}/blob/master/CHANGELOG.md`],
     ['Issues', `${REPO}/issues`],
+    ['Privacy', '/privacy'],
     ['Architecture', `${REPO}/blob/master/docs/architecture.md`],
   ],
 };
