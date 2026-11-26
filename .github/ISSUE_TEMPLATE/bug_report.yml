@@ -17,7 +17,7 @@ body:
     id: version
     attributes:
       label: App version
-      description: For example 1.1.1
+      description: For example 1.2.0
     validations:
       required: true
   - type: input

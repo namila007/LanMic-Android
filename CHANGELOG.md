@@ -1,10 +1,10 @@
 # Changelog
 
-## 1.1.1 — 2026-11-25
+## 1.2.0 — 2026-11-26
 
-Release and store-readiness update. Audio behaviour is unchanged.
+First Google Play release. Audio behaviour is unchanged from 1.1.0.
 
-- **Signed release builds:** both APKs are now signed with a release key instead of the debug key.
+- **Signed release builds:** both apps are now signed with a release key instead of the debug key.
 - **Phone app targets Android 15+ rules (targetSdk 36),** as Google Play requires. The TV app stays at targetSdk 34 so it can still start on boot.
 - **Smaller, shrunk builds:** code and resource shrinking (R8) is on for both apps.
 - **No network for fonts:** the Inter font is bundled, so the apps no longer fetch fonts from the internet.
