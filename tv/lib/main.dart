@@ -14,6 +14,7 @@ import 'ui/features/receiver/views/receiver_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false; // fonts are bundled under assets/google_fonts
   FlutterForegroundTask.initCommunicationPort();
   final prefs = await SharedPreferences.getInstance();
   final pins = SharedPrefsPinStore(prefs);

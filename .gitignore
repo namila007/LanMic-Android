@@ -24,3 +24,8 @@ plan/
 /.gradle/
 /local.properties
 /settings.gradle
+
+*.jks
+*.keystore
+key.properties
+graphify-out/

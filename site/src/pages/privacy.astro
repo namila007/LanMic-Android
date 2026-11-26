@@ -1,0 +1,70 @@
+---
+import Base from '../layouts/Base.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Base title="Privacy policy · LAN Mic" path="/privacy">
+  <main id="main" class="wrap">
+    <p><a href="/">← LAN Mic</a></p>
+    <h1>Privacy policy</h1>
+    <p class="small">Last updated: 24 November 2026</p>
+
+    <p>
+      LAN Mic is two free Android apps: a phone app that captures your voice and a TV app that plays it.
+      The developer does not run any server for them and collects no data from you.
+    </p>
+
+    <h2>What the apps do with your voice</h2>
+    <ul>
+      <li>The phone app uses the microphone only while you are talking, after you grant the microphone permission.</li>
+      <li>Audio is sent as UDP packets over your local Wi-Fi network (port 5004) straight to the TV app you paired with. It does not go to the internet.</li>
+      <li>Audio is played and discarded. It is not recorded, stored or sent to the developer or any third party.</li>
+    </ul>
+
+    <h2>Data we collect</h2>
+    <p>None. The apps have no accounts, no analytics, no advertising and no crash reporting.</p>
+
+    <h2>Data kept on your device</h2>
+    <ul>
+      <li>The TV app keeps the 6-digit pairing PIN, and the apps keep your volume and connection settings, in their own private app storage. Backups are turned off for both apps.</li>
+      <li>You can remove all of this by clearing the app's storage or uninstalling it.</li>
+    </ul>
+
+    <h2>Permissions</h2>
+    <ul>
+      <li><strong>Microphone</strong> (phone): to capture your voice.</li>
+      <li><strong>Network and Wi-Fi state</strong>: to find and talk to the TV on your local network.</li>
+      <li><strong>Foreground service and notifications</strong>: to keep the microphone (phone) or playback (TV) running with a visible notification while the screen is off or another app is open.</li>
+      <li><strong>Run at startup</strong> (TV): so the receiver is ready after the TV boots.</li>
+    </ul>
+
+    <h2>Security: please read</h2>
+    <p>
+      The PIN keeps stray devices from connecting: packets with a wrong PIN are dropped. It is not encryption.
+      Audio and the PIN travel unencrypted on your local network, so anyone on the same Wi-Fi who can capture
+      network traffic could listen. Use LAN Mic only on a home network you trust, and not on public or shared Wi-Fi.
+    </p>
+
+    <h2>This website</h2>
+    <p>
+      This site uses no cookies and no analytics. Our hosting provider (Netlify) may keep standard server logs
+      such as IP address and requested page, under its own privacy policy.
+    </p>
+
+    <h2>Children</h2>
+    <p>LAN Mic does not knowingly collect data from anyone, including children.</p>
+
+    <h2>Changes and contact</h2>
+    <p>
+      If this policy changes, the date above changes. Questions: <a href="mailto:admin@namila.me">admin@namila.me</a>.
+    </p>
+  </main>
+  <Footer />
+</Base>
+
+<style>
+  .wrap { max-width: 720px; margin: 0 auto; padding: var(--space-12) var(--space-5); display: grid; gap: var(--space-4); }
+  h2 { margin-top: var(--space-6); }
+  ul { padding-left: 1.25rem; display: grid; gap: var(--space-2); }
+  .small { font-size: 13px; color: var(--text-tertiary); }
+</style>

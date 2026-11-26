@@ -17,6 +17,7 @@ import 'package:wifi_band/wifi_band.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false; // fonts are bundled under assets/google_fonts
   // The native receiver owns the one UDP socket (ephemeral port): HELLO/END leave from it, and native
   // audio is sent from a dup of the same fd, so the TV sees a single phone address.
   final receiver = NativeReceiver();

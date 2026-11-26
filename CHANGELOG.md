@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 — 2026-11-26
+
+First Google Play release. Audio behaviour is unchanged from 1.1.0.
+
+- **Signed release builds:** both apps are now signed with a release key instead of the debug key.
+- **Phone app targets Android 15+ rules (targetSdk 36),** as Google Play requires. The TV app stays at targetSdk 34 so it can still start on boot.
+- **Smaller, shrunk builds:** code and resource shrinking (R8) is on for both apps.
+- **No network for fonts:** the Inter font is bundled, so the apps no longer fetch fonts from the internet.
+- **Backups off:** app data, including the TV PIN, is excluded from Android backups.
+- **Privacy policy page** added to the website.
+- Added GitHub issue templates and a `build.sh` helper for debug, release and test runs.
+
 ## 1.1.0 — 2026-11-21
 
 About **3× less delay**: native audio on both ends cut the mouth‑to‑TV‑output delay from about 250–300 ms to about 70–80 ms on a Pixel 7 → Chromecast with Google TV, with under 0.5% lost audio.
